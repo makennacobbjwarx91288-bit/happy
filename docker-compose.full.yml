@@ -1,0 +1,40 @@
+# Optional: frontend + backend on same server (one port 80 for SPA + API).
+# Use: docker compose -f docker-compose.full.yml up -d --build
+# Requires ADMIN_PATH in .env for frontend build.
+version: '3.8'
+
+services:
+  backend:
+    build: ./server
+    container_name: shop-backend
+    restart: unless-stopped
+    volumes:
+      - sqlite-data:/app/data
+    environment:
+      - PORT=3001
+      - NODE_ENV=production
+      - DB_PATH=/app/data/database.sqlite
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: .
+      args:
+        ADMIN_PATH: ${ADMIN_PATH:-/manage-admin}
+    container_name: shop-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+volumes:
+  sqlite-data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge

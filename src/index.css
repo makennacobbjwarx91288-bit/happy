@@ -1,0 +1,136 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 45 20% 96%;
+    --foreground: 0 0% 6%;
+
+    --card: 45 20% 96%;
+    --card-foreground: 0 0% 6%;
+
+    --popover: 45 20% 96%;
+    --popover-foreground: 0 0% 6%;
+
+    --primary: 0 0% 6%;
+    --primary-foreground: 45 20% 96%;
+
+    --secondary: 45 15% 92%;
+    --secondary-foreground: 0 0% 6%;
+
+    --muted: 45 10% 90%;
+    --muted-foreground: 0 0% 40%;
+
+    --accent: 30 20% 88%;
+    --accent-foreground: 0 0% 6%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 45 10% 85%;
+    --input: 45 10% 85%;
+    --ring: 0 0% 6%;
+
+    --radius: 0rem;
+
+    --sidebar-background: 45 20% 96%;
+    --sidebar-foreground: 0 0% 6%;
+    --sidebar-primary: 0 0% 6%;
+    --sidebar-primary-foreground: 45 20% 96%;
+    --sidebar-accent: 45 15% 92%;
+    --sidebar-accent-foreground: 0 0% 6%;
+    --sidebar-border: 45 10% 85%;
+    --sidebar-ring: 0 0% 6%;
+
+    /* Custom brand colors */
+    --cream: 45 20% 96%;
+    --charcoal: 0 0% 6%;
+    --warm-gray: 30 5% 75%;
+    --light-sage: 75 15% 92%;
+  }
+
+  .dark {
+    --background: 0 0% 6%;
+    --foreground: 45 20% 96%;
+
+    --card: 0 0% 10%;
+    --card-foreground: 45 20% 96%;
+
+    --popover: 0 0% 10%;
+    --popover-foreground: 45 20% 96%;
+
+    --primary: 45 20% 96%;
+    --primary-foreground: 0 0% 6%;
+
+    --secondary: 0 0% 15%;
+    --secondary-foreground: 45 20% 96%;
+
+    --muted: 0 0% 20%;
+    --muted-foreground: 45 10% 70%;
+
+    --accent: 0 0% 15%;
+    --accent-foreground: 45 20% 96%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 45 20% 96%;
+
+    --sidebar-background: 0 0% 6%;
+    --sidebar-foreground: 45 20% 96%;
+    --sidebar-primary: 45 20% 96%;
+    --sidebar-primary-foreground: 0 0% 6%;
+    --sidebar-accent: 0 0% 15%;
+    --sidebar-accent-foreground: 45 20% 96%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-ring: 45 20% 96%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Playfair Display', serif;
+  }
+}
+
+@layer components {
+  .heading-italic {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-weight: 400;
+  }
+
+  .text-highlight {
+    @apply bg-primary text-primary-foreground px-4 py-2 inline-block;
+  }
+
+  .nav-link {
+    @apply text-sm font-medium tracking-widest uppercase hover:opacity-70 transition-opacity;
+  }
+
+  .product-card {
+    @apply cursor-pointer transition-all duration-300;
+  }
+
+  .product-card:hover img {
+    @apply scale-105;
+  }
+}
