@@ -899,7 +899,10 @@ const publicDir = path.join(__dirname, 'public');
 if (fs.existsSync(path.join(publicDir, 'index.html'))) {
   refreshStoreHosts();
   const STORE_HOSTS_TTL_MS = 60000; // 60s
-  const ADMIN_PATH_FRONT = (process.env.ADMIN_PATH || '/manage-admin').replace(/\/$/, '') || '/manage-admin';
+  // Normalize ADMIN_PATH to one leading slash (env may be "ZNjx..." or "/ZNjx...") so path match works
+  let adminPathNorm = (process.env.ADMIN_PATH || '/manage-admin').trim().replace(/\/+$/, '');
+  if (!adminPathNorm.startsWith('/')) adminPathNorm = '/' + adminPathNorm;
+  const ADMIN_PATH_FRONT = adminPathNorm || '/manage-admin';
 
   app.use((req, res, next) => {
     if (req.method !== 'GET') return next();
