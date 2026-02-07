@@ -56,6 +56,7 @@ app.use(helmet({
   },
   hsts: isSecureContext ? { maxAge: 31536000, includeSubDomains: true } : false,
   crossOriginOpenerPolicy: isSecureContext,
+  originAgentCluster: false, // 避免 "origin-keyed vs site-keyed" 不一致的控制台警告
 }));
 
 // Trust proxy in production (nginx) for correct IP detection
