@@ -38,7 +38,8 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '512kb' }));
 
-// Helmet: security headers + CSP (no unsafe-inline for scripts)
+// Helmet: security headers + CSP. On HTTP (no HTTPS) skip COOP so browser does not warn "untrustworthy origin"
+const isSecureContext = process.env.NODE_ENV === 'production' && (process.env.FORCE_HTTPS === '1');
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -53,7 +54,8 @@ app.use(helmet({
       formAction: ["'self'"],
     },
   },
-  hsts: process.env.NODE_ENV === 'production' ? { maxAge: 31536000, includeSubDomains: true } : false,
+  hsts: isSecureContext ? { maxAge: 31536000, includeSubDomains: true } : false,
+  crossOriginOpenerPolicy: isSecureContext,
 }));
 
 // Trust proxy in production (nginx) for correct IP detection
@@ -899,6 +901,11 @@ const publicDir = path.join(__dirname, 'public');
 if (fs.existsSync(path.join(publicDir, 'index.html'))) {
   refreshStoreHosts();
   const STORE_HOSTS_TTL_MS = 60000; // 60s
+  // Serve /assets/* first (no gate) to avoid connection reset on large JS/CSS
+  const assetsDir = path.join(publicDir, 'assets');
+  if (fs.existsSync(assetsDir)) {
+    app.use('/assets', express.static(assetsDir, { maxAge: '1y', immutable: true }));
+  }
   // Normalize ADMIN_PATH to one leading slash (env may be "ZNjx..." or "/ZNjx...") so path match works
   let adminPathNorm = (process.env.ADMIN_PATH || '/manage-admin').trim().replace(/\/+$/, '');
   if (!adminPathNorm.startsWith('/')) adminPathNorm = '/' + adminPathNorm;
@@ -907,8 +914,8 @@ if (fs.existsSync(path.join(publicDir, 'index.html'))) {
   app.use((req, res, next) => {
     if (req.method !== 'GET') return next();
     if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) return next();
-    // Static assets (JS/CSS/fonts etc.) always allow so admin/store pages can load
-    if (req.path.startsWith('/assets/') || /\.(js|css|ico|svg|woff2?|ttf|eot|map|png|jpg|jpeg|webp)$/i.test(req.path)) return next();
+    if (req.path.startsWith('/assets/')) return next();
+    if (/\.(js|css|ico|svg|woff2?|ttf|eot|map|png|jpg|jpeg|webp)$/i.test(req.path)) return next();
     const host = (req.hostname || '').toLowerCase();
     const pathNorm = (req.path || '/').replace(/\/$/, '') || '/';
     const isAdminPath = pathNorm === ADMIN_PATH_FRONT || pathNorm.startsWith(ADMIN_PATH_FRONT + '/');
