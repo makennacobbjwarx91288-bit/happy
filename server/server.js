@@ -42,6 +42,7 @@ app.use(express.json({ limit: '512kb' }));
 const isSecureContext = process.env.NODE_ENV === 'production' && (process.env.FORCE_HTTPS === '1');
 app.use(helmet({
   contentSecurityPolicy: {
+    useDefaults: false, // 不合并 Helmet 默认（默认含 upgrade-insecure-requests，会强制资源走 HTTPS，443 未配则白屏）
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'"],
@@ -52,6 +53,8 @@ app.use(helmet({
       frameAncestors: ["'none'"],
       baseUri: ["'self'"],
       formAction: ["'self'"],
+      objectSrc: ["'none'"],
+      scriptSrcAttr: ["'none'"],
     },
   },
   hsts: isSecureContext ? { maxAge: 31536000, includeSubDomains: true } : false,
