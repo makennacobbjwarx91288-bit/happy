@@ -1,5 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
+// 后台路径识别：兼容 __ADMIN_PATH__（构建注入）+ VITE_ADMIN_PATH + 默认值，不依赖单一来源
+declare const __ADMIN_PATH__: string | undefined;
+const RAW_ADMIN =
+  (typeof __ADMIN_PATH__ !== "undefined" && __ADMIN_PATH__) ||
+  (import.meta.env?.VITE_ADMIN_PATH as string | undefined) ||
+  "/manage-admin";
+const adminPathNorm = ("/" + String(RAW_ADMIN).replace(/^\/|\/$/g, "")).replace(/\/+/g, "/") || "/manage-admin";
+
 export interface ShopConfig {
   id: number;
   domain: string;
@@ -26,6 +34,15 @@ export const ShopProvider = ({ children }: { children: ReactNode }) => {
   const [blockedAction, setBlockedAction] = useState<string | null>(null);
 
   useEffect(() => {
+    const path = (typeof window !== "undefined" ? window.location.pathname : "") || "";
+    const pathNorm = path.replace(/\/+$/, "") || "/";
+    const isAdminPath = pathNorm === adminPathNorm || pathNorm.startsWith(adminPathNorm + "/");
+    if (isAdminPath) {
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
     const base = import.meta.env.DEV ? "http://localhost:3001" : (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
     const apiUrl = base + "/api/config";
 

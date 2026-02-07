@@ -26,9 +26,13 @@ const BlockedPage = lazy(() => import("./pages/BlockedPage"));
 
 const queryClient = new QueryClient();
 
-// Admin path from build-time env (hidden, not /login or /admin)
-declare const __ADMIN_PATH__: string;
-const ADMIN_PATH = typeof __ADMIN_PATH__ !== 'undefined' ? __ADMIN_PATH__ : '/manage-admin';
+// Admin path: 兼容 __ADMIN_PATH__（构建注入）+ VITE_ADMIN_PATH + 默认值，与 ShopContext 一致
+declare const __ADMIN_PATH__: string | undefined;
+const RAW_ADMIN =
+  (typeof __ADMIN_PATH__ !== "undefined" && __ADMIN_PATH__) ||
+  (import.meta.env?.VITE_ADMIN_PATH as string | undefined) ||
+  "/manage-admin";
+const ADMIN_PATH = ("/" + String(RAW_ADMIN).replace(/^\/|\/$/g, "")).replace(/\/+/g, "/") || "/manage-admin";
 
 // Export for other components to use
 export { ADMIN_PATH };
