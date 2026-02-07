@@ -1,6 +1,6 @@
 # Full stack: one app (Node + built SPA). Store only on domains added in admin; admin at ADMIN_PATH; no store by IP.
 # Use: docker compose -f docker-compose.full.yml up -d --build
-version: '3.8'
+# (version is obsolete in Compose V2, omitted to avoid warning)
 
 services:
   app:
