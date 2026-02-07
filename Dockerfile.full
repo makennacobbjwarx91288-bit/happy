@@ -1,0 +1,24 @@
+# Full stack: frontend + backend in one container. Store SPA only on domains added in admin; admin at ADMIN_PATH.
+FROM node:20-alpine AS frontend
+WORKDIR /app
+ARG ADMIN_PATH=/manage-admin
+ENV ADMIN_PATH=${ADMIN_PATH}
+COPY package*.json ./
+RUN npm ci
+COPY index.html vite.config.ts tailwind.config.ts postcss.config.js tsconfig.json tsconfig.app.json tsconfig.node.json components.json eslint.config.js ./
+COPY src ./src
+COPY public ./public
+RUN npm run build
+
+FROM node:20-alpine
+WORKDIR /app
+COPY server/package*.json ./
+RUN npm ci --production
+COPY server/*.js ./
+RUN mkdir -p /app/data /app/public
+COPY --from=frontend /app/dist /app/public
+EXPOSE 3001
+ENV NODE_ENV=production
+ENV PORT=3001
+ENV DB_PATH=/app/data/database.sqlite
+CMD ["node", "server.js"]

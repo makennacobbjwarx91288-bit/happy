@@ -1,12 +1,15 @@
-# Optional: frontend + backend on same server (one port 80 for SPA + API).
+# Full stack: one app (Node + built SPA). Store only on domains added in admin; admin at ADMIN_PATH; no store by IP.
 # Use: docker compose -f docker-compose.full.yml up -d --build
-# Requires ADMIN_PATH in .env for frontend build.
 version: '3.8'
 
 services:
-  backend:
-    build: ./server
-    container_name: shop-backend
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.full
+      args:
+        ADMIN_PATH: ${ADMIN_PATH:-/manage-admin}
+    container_name: shop-app
     restart: unless-stopped
     volumes:
       - sqlite-data:/app/data
@@ -14,20 +17,23 @@ services:
       - PORT=3001
       - NODE_ENV=production
       - DB_PATH=/app/data/database.sqlite
+      - ADMIN_PATH=${ADMIN_PATH:-/manage-admin}
+      - INIT_ADMIN_USER=${INIT_ADMIN_USER}
+      - INIT_ADMIN_PASS=${INIT_ADMIN_PASS}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
     networks:
       - app-network
 
-  frontend:
-    build:
-      context: .
-      args:
-        ADMIN_PATH: ${ADMIN_PATH:-/manage-admin}
-    container_name: shop-frontend
+  nginx:
+    image: nginx:alpine
+    container_name: shop-nginx
     restart: unless-stopped
     ports:
       - "80:80"
+    volumes:
+      - ./nginx/full-proxy.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
-      - backend
+      - app
     networks:
       - app-network
 

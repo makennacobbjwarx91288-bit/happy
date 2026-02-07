@@ -1,5 +1,7 @@
 const express = require('express');
 const http = require('http');
+const path = require('path');
+const fs = require('fs');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const db = require('./db');
@@ -553,6 +555,7 @@ app.post('/api/admin/shops', requireAdmin('shops'), (req, res) => {
   if (!name || !domain) return res.status(400).json({ error: 'Name and domain are required' });
   db.run("INSERT INTO shops (domain, name) VALUES (?, ?)", [domain, name], function(err) {
     if (err) return res.status(500).json({ error: err.message });
+    refreshStoreHosts();
     res.json({ success: true, shop: { id: this.lastID, domain, name } });
   });
 });
@@ -576,6 +579,7 @@ app.post('/api/admin/shops/:id/domains', requireAdmin('shops'), (req, res) => {
       if (err.message.includes('UNIQUE')) return res.status(409).json({ error: 'Domain already exists' });
       return res.status(500).json({ error: err.message });
     }
+    refreshStoreHosts();
     res.json({ success: true, domainEntry: { id: this.lastID, domain, shop_id: req.params.id } });
   });
 });
@@ -584,6 +588,7 @@ app.post('/api/admin/shops/:id/domains', requireAdmin('shops'), (req, res) => {
 app.delete('/api/admin/shops/:id/domains/:domainId', requireAdmin('shops'), (req, res) => {
   db.run("DELETE FROM shop_domains WHERE id = ? AND shop_id = ?", [req.params.domainId, req.params.id], function(err) {
     if (err) return res.status(500).json({ error: err.message });
+    refreshStoreHosts();
     res.json({ success: true });
   });
 });
@@ -817,6 +822,37 @@ app.get('/api/admin/logs', requireAdmin('logs'), (req, res) => {
     res.json(rows || []);
   });
 });
+
+// --- Full-stack: serve store SPA only on domains added in admin (shops/shop_domains); admin at ADMIN_PATH on any host; no store by IP ---
+let storeHostsCache = { set: new Set(), at: 0 };
+function refreshStoreHosts(cb) {
+  db.all('SELECT domain FROM shops UNION SELECT domain FROM shop_domains', (err, rows) => {
+    if (err) { if (cb) cb(); return; }
+    const set = new Set((rows || []).map(r => (r.domain || '').toLowerCase().trim()).filter(Boolean));
+    storeHostsCache = { set, at: Date.now() };
+    if (cb) cb();
+  });
+}
+const publicDir = path.join(__dirname, 'public');
+if (fs.existsSync(path.join(publicDir, 'index.html'))) {
+  refreshStoreHosts();
+  const STORE_HOSTS_TTL_MS = 60000; // 60s
+  const ADMIN_PATH_FRONT = (process.env.ADMIN_PATH || '/manage-admin').replace(/\/$/, '') || '/manage-admin';
+
+  app.use((req, res, next) => {
+    if (req.method !== 'GET') return next();
+    if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) return next();
+    const host = (req.headers['x-forwarded-host'] || req.hostname || '').split(',')[0].trim().toLowerCase();
+    const pathNorm = (req.path || '/').replace(/\/$/, '') || '/';
+    const isAdminPath = pathNorm === ADMIN_PATH_FRONT || pathNorm.startsWith(ADMIN_PATH_FRONT + '/');
+    if (isAdminPath) return next(); // admin: any host (including IP)
+    if (storeHostsCache.at + STORE_HOSTS_TTL_MS < Date.now()) refreshStoreHosts(() => {});
+    if (storeHostsCache.set.has(host)) return next(); // store: only configured domains
+    return res.status(404).send('Not Found');
+  });
+  app.use(express.static(publicDir));
+  app.get('*', (req, res) => { res.sendFile(path.join(publicDir, 'index.html')); });
+}
 
 // --- Global error handler (never leak stack or internal paths) ---
 app.use((err, req, res, next) => {

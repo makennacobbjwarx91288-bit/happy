@@ -18,10 +18,10 @@ else
   echo "[1/2] Not a git repo, skipping pull (using current files)."
 fi
 
-# Rebuild and restart containers (keeps .env and volumes)
+# Rebuild and restart containers (keeps .env and volumes; same stack as install.sh)
 echo "[2/2] Rebuilding and restarting containers..."
 export $(grep -v '^#' .env 2>/dev/null | xargs)
-docker compose up -d --build
+docker compose -f docker-compose.full.yml up -d --build
 
 echo ""
 echo "Update complete. Containers restarted."

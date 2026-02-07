@@ -50,10 +50,10 @@ ALLOWED_ORIGINS=
 EOF
 fi
 
-# 3. Docker Compose build and run
-echo "[3/4] Building and starting containers..."
+# 3. Docker Compose build and run (full stack: frontend + backend on same server)
+echo "[3/4] Building and starting containers (frontend + backend)..."
 [ -f .env ] && export $(grep -v '^#' .env | xargs)
-docker compose up -d --build
+docker compose -f docker-compose.full.yml up -d --build
 
 # 4. Output access info (do not echo password to avoid shell history / CI log leakage)
 echo "[4/4] Done."
@@ -61,9 +61,10 @@ SERVER_IP=$(curl -s --max-time 2 https://api.ipify.org 2>/dev/null || hostname -
 [ -f .env ] && export $(grep -v '^#' .env | xargs)
 echo ""
 echo "========================================"
-echo "   Backend deployment complete!"
+echo "   Deployment complete!"
 echo "   API:      http://${SERVER_IP}/api/"
-echo "   Admin:    http://${SERVER_IP}${ADMIN_PATH}  (set in frontend build)"
+echo "   Admin:    http://${SERVER_IP}${ADMIN_PATH}"
+echo "   Store:    No IP entry. Add a domain in Admin -> Shop Management, then resolve that domain to this server."
 echo "   Main account credentials are in .env (INIT_ADMIN_USER, INIT_ADMIN_PASS)."
 echo "   Open .env to view; change password in Account Management after first login."
 echo "========================================"
