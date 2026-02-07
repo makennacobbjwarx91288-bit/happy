@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/collapsible";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAdminAuth } from "@/context/AdminAuthContext";
+import { useAdminLocale } from "@/context/AdminLocaleContext";
 import {
   Select,
   SelectContent,
@@ -44,6 +45,11 @@ const ACTION_OPTIONS = [
   { value: "404", label: "404" },
 ] as const;
 
+// 源码/模板选择：仅展示已有源码，无 mock。当前仅胡须店。
+const SHOP_TEMPLATE_OPTIONS = [
+  { value: "beard", label: "胡须店" },
+] as const;
+
 interface DomainEntry {
   id: number;
   domain: string;
@@ -56,6 +62,7 @@ interface ShopData {
   name: string;
   logo_url: string;
   theme_color: string;
+  template?: string;
   created_at: string;
   domains: DomainEntry[];
 }
@@ -73,8 +80,10 @@ interface ShopIpRules {
 
 export const ShopManagementView = () => {
   const { getAuthHeaders, clearAuth } = useAdminAuth();
+  const { t } = useAdminLocale();
   const [shops, setShops] = useState<ShopData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [newShopTemplate, setNewShopTemplate] = useState<string>("beard");
   const [newShopName, setNewShopName] = useState("");
   const [newShopDomain, setNewShopDomain] = useState("");
   const [newDomainInputs, setNewDomainInputs] = useState<Record<number, string>>({});
@@ -106,12 +115,17 @@ export const ShopManagementView = () => {
       const res = await fetch(`${API_URL}/api/admin/shops`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({ name: newShopName.trim(), domain: newShopDomain.trim().toLowerCase() })
+        body: JSON.stringify({
+          name: newShopName.trim(),
+          domain: newShopDomain.trim().toLowerCase(),
+          template: newShopTemplate || "beard",
+        })
       });
       if (res.status === 401) { clearAuth(); return; }
       if (res.ok) {
         setNewShopName("");
         setNewShopDomain("");
+        setNewShopTemplate("beard");
         loadShops();
       }
     } catch (err) { console.error(err); }
@@ -217,27 +231,41 @@ export const ShopManagementView = () => {
           </Button>
           <Dialog>
             <DialogTrigger asChild>
-              <Button className="gap-2"><Plus className="w-4 h-4" />New Shop</Button>
+              <Button className="gap-2"><Plus className="w-4 h-4" />{t("shops.newShop")}</Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Create New Shop</DialogTitle>
-                <DialogDescription>Add a new shop with a primary domain</DialogDescription>
+                <DialogTitle>{t("shops.createTitle")}</DialogTitle>
+                <DialogDescription>{t("shops.createDesc")}</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label>Shop Name</Label>
+                  <Label>{t("shops.sourceLabel")}</Label>
+                  <Select value={newShopTemplate} onValueChange={setNewShopTemplate}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SHOP_TEMPLATE_OPTIONS.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">{t("shops.sourceHint")}</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>{t("shops.shopName")}</Label>
                   <Input placeholder="My Shop" value={newShopName} onChange={e => setNewShopName(e.target.value)} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Primary Domain</Label>
+                  <Label>{t("shops.primaryDomain")}</Label>
                   <Input placeholder="shop.example.com" value={newShopDomain} onChange={e => setNewShopDomain(e.target.value)} />
-                  <p className="text-xs text-muted-foreground">This is the main domain. You can add more domains later.</p>
+                  <p className="text-xs text-muted-foreground">{t("shops.domainHint")}</p>
                 </div>
               </div>
               <DialogFooter>
-                <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-                <DialogClose asChild><Button onClick={createShop}>Create Shop</Button></DialogClose>
+                <DialogClose asChild><Button variant="outline">{t("shops.cancel")}</Button></DialogClose>
+                <DialogClose asChild><Button onClick={createShop}>{t("shops.createBtn")}</Button></DialogClose>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -250,7 +278,7 @@ export const ShopManagementView = () => {
           <Card>
             <CardContent className="flex items-center justify-center py-12 text-muted-foreground">
               <Store className="w-8 h-8 mr-3 opacity-50" />
-              No shops configured yet. Click "New Shop" to create one.
+              {t("shops.noShops")}
             </CardContent>
           </Card>
         ) : (
@@ -279,6 +307,11 @@ export const ShopManagementView = () => {
                           </Button>
                         </CardTitle>
                         <CardDescription>ID: {shop.id} | Primary: {shop.domain}</CardDescription>
+                        {shop.template && (
+                          <Badge variant="secondary" className="text-[10px] mt-1">
+                            {SHOP_TEMPLATE_OPTIONS.find(o => o.value === shop.template)?.label ?? shop.template}
+                          </Badge>
+                        )}
                       </div>
                     )}
                   </div>
@@ -290,14 +323,14 @@ export const ShopManagementView = () => {
               <CardContent>
                 {/* Domain List */}
                 <div className="space-y-3">
-                  <div className="text-sm font-medium mb-2">Bound Domains</div>
+                  <div className="text-sm font-medium mb-2">{t("shops.boundDomains")}</div>
 
                   {/* Primary domain (cannot delete) */}
                   <div className="flex items-center justify-between bg-muted/50 rounded-lg px-4 py-2.5">
                     <div className="flex items-center gap-2">
                       <Globe className="w-4 h-4 text-muted-foreground" />
                       <span className="font-mono text-sm">{shop.domain}</span>
-                      <Badge variant="secondary" className="text-[10px]">Primary</Badge>
+                      <Badge variant="secondary" className="text-[10px]">{t("shops.primary")}</Badge>
                     </div>
                   </div>
 

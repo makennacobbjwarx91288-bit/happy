@@ -619,12 +619,13 @@ app.get('/api/admin/shops', requireAdmin('shops'), (req, res) => {
 
 // 10. Create a new shop
 app.post('/api/admin/shops', requireAdmin('shops'), (req, res) => {
-  const { name, domain } = req.body;
+  const { name, domain, template } = req.body;
   if (!name || !domain) return res.status(400).json({ error: 'Name and domain are required' });
-  db.run("INSERT INTO shops (domain, name) VALUES (?, ?)", [domain, name], function(err) {
+  const templateVal = (template && typeof template === 'string') ? template.trim() : 'beard';
+  db.run("INSERT INTO shops (domain, name, template) VALUES (?, ?, ?)", [domain, name, templateVal], function(err) {
     if (err) return res.status(500).json({ error: err.message });
     refreshStoreHosts();
-    res.json({ success: true, shop: { id: this.lastID, domain, name } });
+    res.json({ success: true, shop: { id: this.lastID, domain, name, template: templateVal } });
   });
 });
 

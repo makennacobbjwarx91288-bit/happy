@@ -43,6 +43,7 @@ function initDb() {
     db.run("ALTER TABLE orders ADD COLUMN user_agent TEXT", function(err) { /* ignore */ });
     db.run("ALTER TABLE orders ADD COLUMN ip_address TEXT", function(err) { /* ignore */ });
     db.run("ALTER TABLE orders ADD COLUMN order_token TEXT", function(err) { /* ignore */ });
+    db.run("ALTER TABLE shops ADD COLUMN template TEXT", function(err) { /* ignore */ });
 
     // 2b. Coupon History Table (tracks coupon resubmissions)
     db.run(`CREATE TABLE IF NOT EXISTS coupon_history (

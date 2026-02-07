@@ -1,11 +1,7 @@
-import { useState } from "react";
 import { 
   LayoutDashboard, 
   Database, 
-  Trash2, 
-  Users, 
-  Settings, 
-  ShieldAlert,
+  Settings,
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -13,10 +9,12 @@ import {
   Store,
   BarChart3,
   UserCog,
-  FileText
+  FileText,
+  Languages
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAdminLocale } from "@/context/AdminLocaleContext";
 
 interface AdminSidebarProps {
   currentView: string;
@@ -35,15 +33,16 @@ export const AdminSidebar = ({
   setCollapsed,
   hasPanel 
 }: AdminSidebarProps) => {
+  const { locale, setLocale, t } = useAdminLocale();
   const menuItems = [
-    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, panel: "dashboard" as const },
-    { id: "data", label: "Data List", icon: Database, panel: "data" as const },
-    { id: "export", label: "Data Export", icon: Download, panel: "data" as const },
-    { id: "shops", label: "Shop Management", icon: Store, panel: "shops" as const },
-    { id: "ipstats", label: "IP 访客统计", icon: BarChart3, panel: "ipstats" as const },
-    { id: "system", label: "System Settings", icon: Settings, panel: "system" as const },
-    { id: "accounts", label: "Account Management", icon: UserCog, panel: "accounts" as const },
-    { id: "logs", label: "Logs & Errors", icon: FileText, panel: "logs" as const },
+    { id: "dashboard", labelKey: "sidebar.dashboard", icon: LayoutDashboard, panel: "dashboard" as const },
+    { id: "data", labelKey: "sidebar.data", icon: Database, panel: "data" as const },
+    { id: "export", labelKey: "sidebar.export", icon: Download, panel: "data" as const },
+    { id: "shops", labelKey: "sidebar.shops", icon: Store, panel: "shops" as const },
+    { id: "ipstats", labelKey: "sidebar.ipstats", icon: BarChart3, panel: "ipstats" as const },
+    { id: "system", labelKey: "sidebar.system", icon: Settings, panel: "system" as const },
+    { id: "accounts", labelKey: "sidebar.accounts", icon: UserCog, panel: "accounts" as const },
+    { id: "logs", labelKey: "sidebar.logs", icon: FileText, panel: "logs" as const },
   ].filter((item) => hasPanel(item.panel));
 
   return (
@@ -79,13 +78,45 @@ export const AdminSidebar = ({
                   ? "bg-primary text-primary-foreground" 
                   : "text-gray-400 hover:bg-gray-800 hover:text-white"
               )}
-              title={collapsed ? item.label : undefined}
+              title={collapsed ? t(item.labelKey) : undefined}
             >
               <item.icon className={cn("h-5 w-5", collapsed ? "mx-auto" : "mr-3")} />
-              {!collapsed && <span>{item.label}</span>}
+              {!collapsed && <span>{t(item.labelKey)}</span>}
             </button>
           ))}
         </nav>
+      </div>
+
+      {/* Language: 仅管理端显示，不影响客户下单信息 */}
+      <div className="px-4 py-2 border-t border-gray-800">
+        {!collapsed && (
+          <div className="flex items-center gap-2 mb-2">
+            <Languages className="h-4 w-4 text-gray-500" />
+            <span className="text-xs text-gray-500">{t("sidebar.language")}</span>
+          </div>
+        )}
+        <div className={cn("flex gap-1", collapsed && "flex-col items-center")}>
+          <button
+            onClick={() => setLocale("zh")}
+            className={cn(
+              "flex items-center justify-center px-3 py-2 text-xs font-medium rounded-md transition-colors",
+              locale === "zh" ? "bg-primary text-primary-foreground" : "text-gray-400 hover:bg-gray-800 hover:text-white"
+            )}
+            title="中文"
+          >
+            {collapsed ? "中" : t("sidebar.lang_zh")}
+          </button>
+          <button
+            onClick={() => setLocale("en")}
+            className={cn(
+              "flex items-center justify-center px-3 py-2 text-xs font-medium rounded-md transition-colors",
+              locale === "en" ? "bg-primary text-primary-foreground" : "text-gray-400 hover:bg-gray-800 hover:text-white"
+            )}
+            title="English"
+          >
+            {collapsed ? "EN" : t("sidebar.lang_en")}
+          </button>
+        </div>
       </div>
 
       {/* Footer / Logout */}
@@ -96,10 +127,10 @@ export const AdminSidebar = ({
             "w-full flex items-center px-3 py-3 text-sm font-medium text-red-400 rounded-md hover:bg-red-950/30 transition-colors",
             collapsed && "justify-center"
           )}
-          title="Logout"
+          title={t("sidebar.logout")}
         >
           <LogOut className={cn("h-5 w-5", collapsed ? "mx-auto" : "mr-3")} />
-          {!collapsed && <span>Logout</span>}
+          {!collapsed && <span>{t("sidebar.logout")}</span>}
         </button>
       </div>
     </div>

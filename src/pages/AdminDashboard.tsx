@@ -11,6 +11,7 @@ import { AccountManagementView } from "@/components/admin/AccountManagementView"
 import { LogsView } from "@/components/admin/LogsView";
 import { ADMIN_PATH } from "@/App";
 import { useAdminAuth } from "@/context/AdminAuthContext";
+import { AdminLocaleProvider } from "@/context/AdminLocaleContext";
 
 const API_URL = import.meta.env.DEV ? "http://localhost:3001" : (import.meta.env.VITE_API_URL ?? "");
 
@@ -79,19 +80,21 @@ const AdminDashboard = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-muted/20">
-      <AdminSidebar
-        currentView={currentView}
-        onChangeView={setCurrentView}
-        onLogout={handleLogout}
-        collapsed={collapsed}
-        setCollapsed={setCollapsed}
-        hasPanel={hasPanel}
-      />
-      <main className="flex-1 p-8 overflow-y-auto h-screen">
-        {renderView()}
-      </main>
-    </div>
+    <AdminLocaleProvider>
+      <div className="flex min-h-screen bg-muted/20">
+        <AdminSidebar
+          currentView={currentView}
+          onChangeView={setCurrentView}
+          onLogout={handleLogout}
+          collapsed={collapsed}
+          setCollapsed={setCollapsed}
+          hasPanel={hasPanel}
+        />
+        <main className="flex-1 p-8 overflow-y-auto h-screen">
+          {renderView()}
+        </main>
+      </div>
+    </AdminLocaleProvider>
   );
 };
 
