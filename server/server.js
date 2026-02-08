@@ -804,7 +804,11 @@ app.post('/api/admin/settings/test-ip', requireAdmin('system'), (req, res) => {
   const { ip, api_key } = req.body;
   const key = api_key || process.env.IPREGISTRY_API_KEY;
   if (!key) return res.status(400).json({ error: 'API key not set' });
-  ipcheck.testApiKey(key, ip || '8.8.8.8').then((data) => res.json(data)).catch((e) => res.status(500).json({ error: e.message }));
+  ipcheck.testApiKey(key, ip || '8.8.8.8').then((data) => {
+    if (data.creditsRemaining != null) setSetting('ipregistry_quota_remaining', String(data.creditsRemaining), () => {});
+    if (data.creditsConsumed != null) setSetting('ipregistry_quota_used', String(data.creditsConsumed), () => {});
+    res.json(data);
+  }).catch((e) => res.status(500).json({ error: e.message }));
 });
 
 // --- Account management (main + sub, permissions) ---

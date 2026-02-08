@@ -71,8 +71,12 @@ export const SystemSettingsView = () => {
       });
       if (res.status === 401) clearAuth();
       const data = await res.json();
-      if (res.ok && data.ok) setTestResult({ ok: true });
-      else setTestResult({ error: data.error || "Test failed" });
+      if (res.ok && data.ok) {
+        setTestResult({ ok: true });
+        loadSettings();
+      } else {
+        setTestResult({ error: data.error || "Test failed" });
+      }
     } catch (err) {
       setTestResult({ error: (err as Error).message });
     } finally {
@@ -117,15 +121,15 @@ export const SystemSettingsView = () => {
               </Button>
             </div>
           </div>
-          {total != null && (
+          {(used != null || remaining != null) && (
             <div className="space-y-2">
               <Label>{t("system.quotaLabel")}</Label>
               <div className="flex items-center gap-4 text-sm">
-                <span>{t("system.quotaUsed")}: {used ?? "—"}</span>
-                <span>{t("system.quotaRemaining")}: {remaining ?? "—"}</span>
-                <span className="text-muted-foreground">Total: {total}</span>
+                {used != null && <span>{t("system.quotaUsed")}: {used}</span>}
+                {remaining != null && <span>{t("system.quotaRemaining")}: {remaining}</span>}
+                {total != null && <span className="text-muted-foreground">Total: {total}</span>}
               </div>
-              <Progress value={pct} className="h-2 max-w-xs" />
+              {total != null && <Progress value={pct} className="h-2 max-w-xs" />}
             </div>
           )}
           <div className="flex flex-wrap items-center gap-2">
