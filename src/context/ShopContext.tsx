@@ -15,6 +15,7 @@ export interface ShopConfig {
   name: string;
   logo_url: string;
   theme_color: string;
+  layout_config?: any;
 }
 
 interface ShopContextType {
@@ -66,6 +67,17 @@ export const ShopProvider = ({ children }: { children: ReactNode }) => {
       })
       .then((data) => {
         if (data == null) return;
+        
+        // Parse layout_config if it's a JSON string from SQLite
+        if (data.layout_config && typeof data.layout_config === 'string') {
+          try {
+            data.layout_config = JSON.parse(data.layout_config);
+          } catch (e) {
+            console.error("Failed to parse layout_config", e);
+            data.layout_config = {};
+          }
+        }
+
         setConfig(data);
         setLoading(false);
         if (data.name) document.title = data.name;

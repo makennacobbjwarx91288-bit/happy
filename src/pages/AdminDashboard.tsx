@@ -62,6 +62,8 @@ const AdminDashboard = () => {
         return <DataExportView />;
       case "shops":
         return <ShopManagementView />;
+      case "design":
+        return <ShopDesignView />;
       case "ipstats":
         return <IPStatsView />;
       case "system":

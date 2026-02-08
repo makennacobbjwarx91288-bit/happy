@@ -12,20 +12,37 @@ const Header = () => {
   const { config } = useShop();
   const shopName = config?.name || "Shop";
 
-  const navLinks = ["Shop", "Deals", "Beard", "Hair", "Body", "Fragrances"];
+  const headerConfig = config?.layout_config?.header || {};
+  const announcementEnabled = headerConfig.announcementEnabled !== false;
+  const announcementText = headerConfig.announcementText || "Norse Winter Beard Oil Available Now";
+
+  const defaultLinks = [
+    { label: "Shop", href: "/shop" },
+    { label: "Deals", href: "/deals" },
+    { label: "Beard", href: "/category/beard" },
+    { label: "Hair", href: "/category/hair" },
+    { label: "Body", href: "/category/body" },
+    { label: "Fragrances", href: "/category/fragrances" }
+  ];
+
+  const navLinks = (headerConfig.navLinks && headerConfig.navLinks.length > 0) 
+    ? headerConfig.navLinks 
+    : defaultLinks;
 
   return (
     <>
       {/* Announcement Bar */}
-      <motion.div
-        initial={{ y: -40 }}
-        animate={{ y: 0 }}
-        className="bg-primary text-primary-foreground py-2 text-center"
-      >
-        <p className="text-sm font-medium tracking-wide">
-          <span className="font-semibold">Norse Winter Beard Oil</span> Available Now
-        </p>
-      </motion.div>
+      {announcementEnabled && (
+        <motion.div
+          initial={{ y: -40 }}
+          animate={{ y: 0 }}
+          className="bg-primary text-primary-foreground py-2 text-center"
+        >
+          <p className="text-sm font-medium tracking-wide">
+            {announcementText}
+          </p>
+        </motion.div>
+      )}
 
       {/* Main Header */}
       <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border transition-all duration-300">
@@ -46,18 +63,18 @@ const Header = () => {
 
             {/* Desktop Navigation */}
             <nav className="hidden lg:flex items-center gap-8">
-              {navLinks.map((link, index) => (
+              {navLinks.map((link: any, index: number) => (
                 <motion.div
-                  key={link}
+                  key={link.label}
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
                 >
                   <Link
-                    to={`/${link.toLowerCase()}`}
+                    to={link.href}
                     className="nav-link"
                   >
-                    {link}
+                    {link.label}
                   </Link>
                 </motion.div>
               ))}
@@ -99,14 +116,14 @@ const Header = () => {
               className="lg:hidden border-t border-border overflow-hidden"
             >
               <nav className="flex flex-col py-4">
-                {navLinks.map((link) => (
+                {navLinks.map((link: any) => (
                   <Link
-                    key={link}
-                    to={`/${link.toLowerCase()}`}
+                    key={link.label}
+                    to={link.href}
                     className="px-6 py-3 nav-link"
                     onClick={() => setIsMenuOpen(false)}
                   >
-                    {link}
+                    {link.label}
                   </Link>
                 ))}
               </nav>

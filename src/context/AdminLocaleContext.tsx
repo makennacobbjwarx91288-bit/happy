@@ -10,6 +10,7 @@ const ADMIN_STRINGS: Record<string, { zh: string; en: string }> = {
   "sidebar.data": { zh: "数据列表", en: "Data List" },
   "sidebar.export": { zh: "数据导出", en: "Data Export" },
   "sidebar.shops": { zh: "店铺管理", en: "Shop Management" },
+  "sidebar.design": { zh: "店铺装修", en: "Design" },
   "sidebar.ipstats": { zh: "IP 访客统计", en: "IP Stats" },
   "sidebar.system": { zh: "系统设置", en: "System Settings" },
   "sidebar.accounts": { zh: "账号管理", en: "Account Management" },

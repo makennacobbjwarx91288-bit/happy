@@ -647,21 +647,39 @@ app.get('/api/admin/shops', requireAdmin('shops'), (req, res) => {
 
 // 10. Create a new shop
 app.post('/api/admin/shops', requireAdmin('shops'), (req, res) => {
-  const { name, domain, template } = req.body;
+  const { name, domain, template, layout_config } = req.body;
   if (!name || !domain) return res.status(400).json({ error: 'Name and domain are required' });
   const templateVal = (template && typeof template === 'string') ? template.trim() : 'beard';
-  db.run("INSERT INTO shops (domain, name, template) VALUES (?, ?, ?)", [domain, name, templateVal], function(err) {
+  const configVal = layout_config ? (typeof layout_config === 'object' ? JSON.stringify(layout_config) : layout_config) : null;
+  
+  db.run("INSERT INTO shops (domain, name, template, layout_config) VALUES (?, ?, ?, ?)", [domain, name, templateVal, configVal], function(err) {
     if (err) return res.status(500).json({ error: err.message });
     refreshStoreHosts();
-    res.json({ success: true, shop: { id: this.lastID, domain, name, template: templateVal } });
+    res.json({ success: true, shop: { id: this.lastID, domain, name, template: templateVal, layout_config: configVal } });
   });
 });
 
-// 11. Update shop name
+// 11. Update shop (name or layout_config)
 app.put('/api/admin/shops/:id', requireAdmin('shops'), (req, res) => {
-  const { name } = req.body;
-  if (!name) return res.status(400).json({ error: 'Name is required' });
-  db.run("UPDATE shops SET name = ? WHERE id = ?", [name, req.params.id], function(err) {
+  const { name, layout_config } = req.body;
+  if (!name && layout_config === undefined) return res.status(400).json({ error: 'Nothing to update' });
+  
+  const updates = [];
+  const params = [];
+  
+  if (name) {
+    updates.push('name = ?');
+    params.push(name);
+  }
+  
+  if (layout_config !== undefined) {
+    updates.push('layout_config = ?');
+    params.push(typeof layout_config === 'object' ? JSON.stringify(layout_config) : layout_config);
+  }
+  
+  params.push(req.params.id);
+  
+  db.run(`UPDATE shops SET ${updates.join(', ')} WHERE id = ?`, params, function(err) {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ success: true });
   });
