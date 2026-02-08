@@ -7,7 +7,7 @@ const TOKEN_BYTES = 32;
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // Panel IDs for permission check (sub-accounts)
-const ADMIN_PANELS = ['dashboard', 'data', 'shops', 'ipstats', 'system', 'accounts', 'logs'];
+const ADMIN_PANELS = ['dashboard', 'data', 'export', 'shops', 'ipstats', 'system', 'accounts', 'logs'];
 
 function sanitizePanels(arr) {
   if (!Array.isArray(arr)) return [];

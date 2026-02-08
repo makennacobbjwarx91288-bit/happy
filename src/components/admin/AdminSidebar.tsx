@@ -37,7 +37,7 @@ export const AdminSidebar = ({
   const menuItems = [
     { id: "dashboard", labelKey: "sidebar.dashboard", icon: LayoutDashboard, panel: "dashboard" as const },
     { id: "data", labelKey: "sidebar.data", icon: Database, panel: "data" as const },
-    { id: "export", labelKey: "sidebar.export", icon: Download, panel: "data" as const },
+    { id: "export", labelKey: "sidebar.export", icon: Download, panel: "export" as const },
     { id: "shops", labelKey: "sidebar.shops", icon: Store, panel: "shops" as const },
     { id: "ipstats", labelKey: "sidebar.ipstats", icon: BarChart3, panel: "ipstats" as const },
     { id: "system", labelKey: "sidebar.system", icon: Settings, panel: "system" as const },
