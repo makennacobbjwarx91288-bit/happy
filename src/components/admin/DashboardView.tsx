@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { format, isSameDay, startOfDay, endOfDay, subDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useAdminAuth } from "@/context/AdminAuthContext";
+import { useAdminLocale } from "@/context/AdminLocaleContext";
 
 const API_URL = import.meta.env.DEV ? "http://localhost:3001" : (import.meta.env.VITE_API_URL ?? "");
 
@@ -21,6 +22,7 @@ interface OrderData {
 
 export const DashboardView = () => {
   const { getAuthHeaders, clearAuth } = useAdminAuth();
+  const { t } = useAdminLocale();
   const [orders, setOrders] = useState<OrderData[]>([]);
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [shopDomains, setShopDomains] = useState<{name: string; domain: string; domains: {domain: string}[]}[]>([]);
@@ -69,9 +71,9 @@ export const DashboardView = () => {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-            <h2 className="text-2xl font-bold tracking-tight">Dashboard Overview</h2>
+            <h2 className="text-2xl font-bold tracking-tight">{t("dashboard.title")}</h2>
             <p className="text-muted-foreground text-sm">
-                {date ? format(date, "PPP") : "All Time"} Statistics
+                {date ? format(date, "PPP") : t("dashboard.allTime")} {t("dashboard.statsDate")}
             </p>
         </div>
         
@@ -82,7 +84,7 @@ export const DashboardView = () => {
                 onClick={() => setDate(new Date())}
                 className={isSameDay(date || new Date(), new Date()) ? "bg-secondary" : ""}
             >
-                Today
+                {t("dashboard.today")}
             </Button>
             <Popover>
                 <PopoverTrigger asChild>
@@ -95,7 +97,7 @@ export const DashboardView = () => {
                         )}
                     >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {date ? format(date, "PPP") : <span>Pick a date</span>}
+                        {date ? format(date, "PPP") : <span>{t("dashboard.pickDate")}</span>}
                     </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="end">
@@ -114,20 +116,20 @@ export const DashboardView = () => {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("dashboard.totalRevenue")}</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalRevenue.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground mt-1">
-                Generated on {date ? format(date, "MMM dd") : "selected date"}
+                {t("dashboard.generatedOn")} {date ? format(date, "MMM dd") : ""}
             </p>
           </CardContent>
         </Card>
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("dashboard.totalOrders")}</CardTitle>
             <ShoppingCart className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -135,10 +137,10 @@ export const DashboardView = () => {
             <div className="flex items-center text-xs text-muted-foreground mt-1">
                {totalOrders > 0 ? (
                    <span className="text-green-500 flex items-center gap-1">
-                       <ArrowUpRight className="w-3 h-3" /> Active
+                       <ArrowUpRight className="w-3 h-3" /> {t("dashboard.active")}
                    </span>
                ) : (
-                   <span>No orders yet</span>
+                   <span>{t("dashboard.noOrdersYet")}</span>
                )}
             </div>
           </CardContent>
@@ -146,26 +148,26 @@ export const DashboardView = () => {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Success Rate</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("dashboard.successRate")}</CardTitle>
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{conversionRate}%</div>
             <p className="text-xs text-muted-foreground mt-1">
-                {completedOrders} completed / {totalOrders} total
+                {completedOrders} / {totalOrders} {t("dashboard.completedTotal")}
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Live / Pending</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("dashboard.livePending")}</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{activeOrders}</div>
             <p className="text-xs text-muted-foreground mt-1">
-                Currently processing
+                {t("dashboard.currentlyProcessing")}
             </p>
           </CardContent>
         </Card>
@@ -175,7 +177,7 @@ export const DashboardView = () => {
       {shopDomains.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Globe className="w-5 h-5" />Frontend Domains</CardTitle>
+            <CardTitle className="flex items-center gap-2"><Globe className="w-5 h-5" />{t("dashboard.frontendDomains")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -186,7 +188,7 @@ export const DashboardView = () => {
                     <div className="flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0"></span>
                       <span className="font-mono text-xs truncate">{shop.domain}</span>
-                      <Badge variant="secondary" className="text-[9px] h-4">Primary</Badge>
+                      <Badge variant="secondary" className="text-[9px] h-4">{t("shops.primary")}</Badge>
                     </div>
                     {shop.domains?.map((d: any, j: number) => (
                       <div key={j} className="flex items-center gap-2">
@@ -205,12 +207,12 @@ export const DashboardView = () => {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         <Card className="col-span-4 lg:col-span-4">
           <CardHeader>
-            <CardTitle>Recent Activity Stream</CardTitle>
+            <CardTitle>{t("dashboard.recentActivity")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-8 max-h-[300px] overflow-y-auto pr-2">
                 {recentActivity.length === 0 ? (
-                    <div className="text-center text-muted-foreground py-8">No activity recorded for this period.</div>
+                    <div className="text-center text-muted-foreground py-8">{t("dashboard.noActivity")}</div>
                 ) : (
                     recentActivity.map((order, i) => (
                         <div key={i} className="flex items-center">
@@ -222,7 +224,7 @@ export const DashboardView = () => {
                                 )}></span>
                                 <div className="ml-4 space-y-1">
                                     <p className="text-sm font-medium leading-none">
-                                        Order {order.id} - {order.customer.firstName}
+                                        {t("dashboard.orderLabel")} {order.id} - {order.customer.firstName}
                                     </p>
                                     <p className="text-xs text-muted-foreground">
                                         {new Date(order.created_at).toLocaleTimeString()} • {order.status}
@@ -241,20 +243,20 @@ export const DashboardView = () => {
         
         <Card className="col-span-3 lg:col-span-3">
             <CardHeader>
-                <CardTitle>Status Distribution</CardTitle>
+                <CardTitle>{t("dashboard.statusDist")}</CardTitle>
             </CardHeader>
             <CardContent>
                 <div className="space-y-4">
                     <div className="flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-500"></div> Completed</span>
+                        <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-500"></div> {t("dashboard.completed")}</span>
                         <span className="font-bold">{completedOrders}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500"></div> Processing</span>
+                        <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500"></div> {t("dashboard.processing")}</span>
                         <span className="font-bold">{activeOrders}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-500"></div> Rejected</span>
+                        <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-500"></div> {t("dashboard.rejected")}</span>
                         <span className="font-bold">{filteredOrders.filter(o => o.status === "REJECTED").length}</span>
                     </div>
                 </div>

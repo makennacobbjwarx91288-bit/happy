@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useToast } from "@/components/ui/use-toast";
 import { ADMIN_PATH } from "@/App";
 import { useAdminAuth } from "@/context/AdminAuthContext";
+import { useAdminLocale } from "@/context/AdminLocaleContext";
 
 const API_URL = import.meta.env.DEV ? "http://localhost:3001" : (import.meta.env.VITE_API_URL ?? "");
 
@@ -14,6 +15,7 @@ const Login = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { setAuth } = useAdminAuth();
+  const { t } = useAdminLocale();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -29,7 +31,7 @@ const Login = () => {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast({ variant: "destructive", title: "Login Failed", description: data.error || "Invalid credentials." });
+        toast({ variant: "destructive", title: t("login.failed"), description: data.error || t("login.invalidCreds") });
         return;
       }
       setAuth(data.token, {
@@ -37,10 +39,10 @@ const Login = () => {
         role: data.role,
         permissions: data.permissions ?? null,
       });
-      toast({ title: "Login Successful", description: `Welcome, ${data.username}.` });
+      toast({ title: t("login.success"), description: `${t("login.welcome")}${data.username}.` });
       navigate(`${ADMIN_PATH}/dashboard`);
     } catch {
-      toast({ variant: "destructive", title: "Login Failed", description: "Network error." });
+      toast({ variant: "destructive", title: t("login.failed"), description: t("login.networkError") });
     } finally {
       setLoading(false);
     }
@@ -50,25 +52,25 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-muted/20 px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-serif">Admin Login</CardTitle>
-          <CardDescription>Enter your credentials to access the dashboard</CardDescription>
+          <CardTitle className="text-2xl font-serif">{t("login.title")}</CardTitle>
+          <CardDescription>{t("login.desc")}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="username">{t("login.username")}</Label>
               <Input
                 id="username"
                 type="text"
                 autoComplete="username"
-                placeholder="Username"
+                placeholder={t("login.username")}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t("login.password")}</Label>
               <Input
                 id="password"
                 type="password"
@@ -80,7 +82,7 @@ const Login = () => {
               />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Signing in..." : "Login"}
+              {loading ? t("login.signingIn") : t("login.submit")}
             </Button>
           </form>
         </CardContent>

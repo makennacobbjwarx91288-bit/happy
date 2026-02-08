@@ -8,6 +8,7 @@ import { CartProvider } from "./context/CartContext";
 import { RealtimeProvider } from "./context/RealtimeContext";
 import { ShopProvider, useShop } from "./context/ShopContext";
 import { AdminAuthProvider } from "./context/AdminAuthContext";
+import { AdminLocaleProvider } from "./context/AdminLocaleContext";
 import ScrollToTop from "./components/ScrollToTop";
 import { Loader2 } from "lucide-react";
 
@@ -56,8 +57,9 @@ const AppContent = () => {
           <BrowserRouter>
             <ScrollToTop />
             <AdminAuthProvider>
-            <Suspense fallback={<PageLoader />}>
-              <Routes>
+              <AdminLocaleProvider>
+                <Suspense fallback={<PageLoader />}>
+                  <Routes>
                   <Route path="/" element={<Index />} />
                   <Route path="/checkout" element={<Checkout />} />
                   <Route path="/verify-coupon" element={<CouponVerification />} />
@@ -92,8 +94,9 @@ const AppContent = () => {
 
                   {/* Catch-all: NOT FOUND */}
                   <Route path="*" element={<NotFound />} />
-                </Routes>
-              </Suspense>
+                  </Routes>
+                </Suspense>
+              </AdminLocaleProvider>
             </AdminAuthProvider>
             </BrowserRouter>
           </TooltipProvider>

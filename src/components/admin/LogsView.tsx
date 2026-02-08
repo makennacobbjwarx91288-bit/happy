@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useAdminAuth } from "@/context/AdminAuthContext";
+import { useAdminLocale } from "@/context/AdminLocaleContext";
 import { FileText, RefreshCw } from "lucide-react";
 import {
   Table,
@@ -24,6 +25,7 @@ interface LogRow {
 
 export const LogsView = () => {
   const { getAuthHeaders, clearAuth } = useAdminAuth();
+  const { t } = useAdminLocale();
   const [logs, setLogs] = useState<LogRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -47,33 +49,33 @@ export const LogsView = () => {
     <div className="space-y-8">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Logs & Errors</h2>
-          <p className="text-muted-foreground text-sm mt-1">Security and auth events (no stack or sensitive data)</p>
+          <h2 className="text-2xl font-bold tracking-tight">{t("logs.title")}</h2>
+          <p className="text-muted-foreground text-sm mt-1">{t("logs.subtitle")}</p>
         </div>
         <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} /> Refresh
+          <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} /> {t("logs.refresh")}
         </Button>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><FileText className="w-5 h-5" /> Security logs</CardTitle>
-          <CardDescription>Login failures, 403, IP blocks. No DB paths or keys are logged.</CardDescription>
+          <CardTitle className="flex items-center gap-2"><FileText className="w-5 h-5" /> {t("logs.securityLogs")}</CardTitle>
+          <CardDescription>{t("logs.securityDesc")}</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Time</TableHead>
-                <TableHead>Kind</TableHead>
-                <TableHead>IP</TableHead>
-                <TableHead>Detail</TableHead>
+                <TableHead>{t("logs.time")}</TableHead>
+                <TableHead>{t("logs.kind")}</TableHead>
+                <TableHead>{t("logs.ip")}</TableHead>
+                <TableHead>{t("logs.detail")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {logs.length === 0 && !loading ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground">No logs yet</TableCell>
+                  <TableCell colSpan={4} className="text-center text-muted-foreground">{t("logs.noLogs")}</TableCell>
                 </TableRow>
               ) : (
                 logs.map((row) => (

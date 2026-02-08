@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Monitor, Check, X, MessageSquare, RefreshCw, Filter, RotateCcw, Smartphone, Globe, Radio } from "lucide-react";
 import { useRealtime } from "@/context/RealtimeContext";
 import { useAdminAuth } from "@/context/AdminAuthContext";
+import { useAdminLocale } from "@/context/AdminLocaleContext";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger,
 } from "@/components/ui/dialog";
@@ -75,6 +76,7 @@ const API_URL = import.meta.env.DEV ? "http://localhost:3001" : (import.meta.env
 
 export const DataListView = () => {
   const { getAuthHeaders, clearAuth, token } = useAdminAuth();
+  const { t } = useAdminLocale();
   const [orders, setOrders] = useState<OrderData[]>([]);
   const [liveSessions, setLiveSessions] = useState<LiveSession[]>([]);
   const [filterType, setFilterType] = useState<"all" | "pending" | "completed" | "online">("all");
@@ -225,7 +227,8 @@ export const DataListView = () => {
       RETURN_COUPON: "bg-orange-100 text-orange-800 border-orange-200 animate-pulse",
       LIVE_TYPING: "bg-emerald-100 text-emerald-800 border-emerald-300 animate-pulse",
     };
-    const label = status === "APPROVED" ? "WAITING SMS" : status === "RETURN_COUPON" ? "RETURN COUPON" : status === "LIVE_TYPING" ? "LIVE TYPING" : status === "AUTO_REJECTED" ? "AUTO REJECTED" : status;
+    const labelKey = status === "APPROVED" ? "WAITING_SMS" : status;
+    const label = ["COMPLETED", "APPROVED", "WAITING_SMS", "WAITING_APPROVAL", "SMS_SUBMITTED", "REJECTED", "AUTO_REJECTED", "RETURN_COUPON", "LIVE_TYPING"].includes(labelKey) ? t(`status.${labelKey}`) : status;
     return <Badge variant="outline" className={s[status] || ""}>{label}</Badge>;
   };
 
@@ -233,53 +236,53 @@ export const DataListView = () => {
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Data Management</h2>
-          <p className="text-muted-foreground text-sm mt-1">Real-time monitoring of customer submissions</p>
+          <h2 className="text-2xl font-bold tracking-tight">{t("data.title")}</h2>
+          <p className="text-muted-foreground text-sm mt-1">{t("data.subtitle")}</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-muted-foreground" />
             <Select value={filterType} onValueChange={(v: any) => setFilterType(v)}>
-              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter" /></SelectTrigger>
+              <SelectTrigger className="w-[180px]"><SelectValue placeholder={t("data.filter")} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Orders</SelectItem>
-                <SelectItem value="pending">Pending Action</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="online">Online Users</SelectItem>
+                <SelectItem value="all">{t("data.allOrders")}</SelectItem>
+                <SelectItem value="pending">{t("data.pendingAction")}</SelectItem>
+                <SelectItem value="completed">{t("data.completed")}</SelectItem>
+                <SelectItem value="online">{t("data.onlineUsers")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <Button variant="outline" size="icon" onClick={loadOrders} disabled={isRefreshing} className={isRefreshing ? "animate-spin" : ""} title="Refresh"><RefreshCw className="w-4 h-4" /></Button>
+          <Button variant="outline" size="icon" onClick={loadOrders} disabled={isRefreshing} className={isRefreshing ? "animate-spin" : ""} title={t("data.refresh")}><RefreshCw className="w-4 h-4" /></Button>
           {liveSessions.length > 0 && (
             <Badge className="bg-emerald-600 text-white text-sm px-3 py-1 h-9 animate-pulse">
-              <Radio className="w-3 h-3 mr-1" />{liveSessions.length} Live
+              <Radio className="w-3 h-3 mr-1" />{liveSessions.length} {t("data.live")}
             </Badge>
           )}
-          <Badge variant="default" className="text-sm px-3 py-1 h-9"><span className="flex items-center gap-1">🟢 Live</span></Badge>
+          <Badge variant="default" className="text-sm px-3 py-1 h-9"><span className="flex items-center gap-1">🟢 {t("data.live")}</span></Badge>
         </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Monitor className="w-5 h-5" />Order Submissions ({filteredOrders.length})</CardTitle>
+          <CardTitle className="flex items-center gap-2"><Monitor className="w-5 h-5" />{t("data.orderSubmissions")} ({filteredOrders.length})</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Order ID</TableHead>
-                <TableHead>Shop</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Coupon Info</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>{t("data.orderId")}</TableHead>
+                <TableHead>{t("data.shop")}</TableHead>
+                <TableHead>{t("data.date")}</TableHead>
+                <TableHead>{t("data.customer")}</TableHead>
+                <TableHead>{t("data.amount")}</TableHead>
+                <TableHead>{t("data.couponInfo")}</TableHead>
+                <TableHead>{t("data.status")}</TableHead>
+                <TableHead className="text-right">{t("data.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredOrders.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No data found</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">{t("data.noDataFound")}</TableCell></TableRow>
               ) : (
                 filteredOrders.map((order) => (
                   <TableRow key={order.id} className={
@@ -298,8 +301,8 @@ export const DataListView = () => {
                             </DialogTrigger>
                             <DialogContent className="max-w-lg">
                               <DialogHeader>
-                                <DialogTitle className="flex items-center gap-2"><Radio className="w-4 h-4 text-emerald-600 animate-pulse" />Live Session Preview</DialogTitle>
-                                <DialogDescription>User is currently typing...</DialogDescription>
+                                <DialogTitle className="flex items-center gap-2"><Radio className="w-4 h-4 text-emerald-600 animate-pulse" />{t("data.liveSessionPreview")}</DialogTitle>
+                                <DialogDescription>{t("data.userTyping")}</DialogDescription>
                               </DialogHeader>
                               <div className="py-4">
                                 <CouponCard
@@ -325,8 +328,8 @@ export const DataListView = () => {
                             </DialogTrigger>
                             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                               <DialogHeader>
-                                <DialogTitle>Order Details</DialogTitle>
-                                <DialogDescription>Details for {order.id} from {order.shop_name}</DialogDescription>
+                                <DialogTitle>{t("data.orderDetails")}</DialogTitle>
+                                <DialogDescription>{t("data.detailsFor")} {order.id}{t("data.from")}{order.shop_name}</DialogDescription>
                               </DialogHeader>
                               <div className="space-y-6 py-4">
                                 {/* Coupon Card Visual */}
@@ -340,27 +343,27 @@ export const DataListView = () => {
                                 </div>
                                 {/* Customer */}
                                 <div className="border-b pb-4">
-                                  <div className="text-sm font-bold uppercase tracking-wider mb-3">Customer Information</div>
+                                  <div className="text-sm font-bold uppercase tracking-wider mb-3">{t("data.customerInfo")}</div>
                                   <div className="grid grid-cols-2 gap-y-3 gap-x-8">
-                                    <div><div className="text-xs text-muted-foreground">Name</div><div className="font-medium">{order.customer.firstName} {order.customer.lastName}</div></div>
-                                    <div><div className="text-xs text-muted-foreground">Email</div><div className="font-medium">{order.customer.email}</div></div>
-                                    <div><div className="text-xs text-muted-foreground">Phone</div><div className="font-medium">{order.customer.phone || "N/A"}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">{t("data.name")}</div><div className="font-medium">{order.customer.firstName} {order.customer.lastName}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">{t("data.email")}</div><div className="font-medium">{order.customer.email}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">{t("data.phone")}</div><div className="font-medium">{order.customer.phone || "N/A"}</div></div>
                                   </div>
                                 </div>
                                 {/* Address */}
                                 <div className="border-b pb-4">
-                                  <div className="text-sm font-bold uppercase tracking-wider mb-3">Shipping Address</div>
+                                  <div className="text-sm font-bold uppercase tracking-wider mb-3">{t("data.shippingAddress")}</div>
                                   <div className="grid grid-cols-2 gap-y-3 gap-x-8">
-                                    <div className="col-span-2"><div className="text-xs text-muted-foreground">Address</div><div className="font-medium">{order.customer.address || "N/A"}</div></div>
-                                    <div><div className="text-xs text-muted-foreground">City</div><div className="font-medium">{order.customer.city || "N/A"}</div></div>
-                                    <div><div className="text-xs text-muted-foreground">State</div><div className="font-medium">{order.customer.state || "N/A"}</div></div>
-                                    <div><div className="text-xs text-muted-foreground">ZIP</div><div className="font-medium">{order.customer.zipCode || "N/A"}</div></div>
-                                    <div><div className="text-xs text-muted-foreground">Country</div><div className="font-medium">{order.customer.country || "N/A"}</div></div>
+                                    <div className="col-span-2"><div className="text-xs text-muted-foreground">{t("data.address")}</div><div className="font-medium">{order.customer.address || "N/A"}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">{t("data.city")}</div><div className="font-medium">{order.customer.city || "N/A"}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">{t("data.state")}</div><div className="font-medium">{order.customer.state || "N/A"}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">{t("data.zip")}</div><div className="font-medium">{order.customer.zipCode || "N/A"}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">{t("data.country")}</div><div className="font-medium">{order.customer.country || "N/A"}</div></div>
                                   </div>
                                 </div>
                                 {/* Technical */}
                                 <div className="border-b pb-4">
-                                  <div className="text-sm font-bold uppercase tracking-wider mb-3">Technical Info</div>
+                                  <div className="text-sm font-bold uppercase tracking-wider mb-3">{t("data.technicalInfo")}</div>
                                   <div className="space-y-3">
                                     <div className="flex items-start gap-3"><div className="text-xs text-muted-foreground min-w-[40px] pt-1">IP</div><div className="font-mono text-sm bg-muted px-2 py-1 rounded break-all flex-1">{order.ipAddress || "Unknown"}</div></div>
                                     <div className="flex items-start gap-3"><div className="text-xs text-muted-foreground min-w-[40px] pt-1">UA</div><div className="font-mono text-xs bg-muted px-2 py-1 rounded break-all leading-relaxed flex-1">{order.userAgent || "Unknown"}</div></div>
@@ -368,22 +371,22 @@ export const DataListView = () => {
                                 </div>
                                 {/* Verification */}
                                 <div className="border-b pb-4 bg-muted/20 -mx-6 px-6 py-4">
-                                  <div className="text-sm font-bold uppercase tracking-wider mb-3">Verification Details</div>
+                                  <div className="text-sm font-bold uppercase tracking-wider mb-3">{t("data.verificationDetails")}</div>
                                   <div className="grid grid-cols-2 gap-y-3 gap-x-8">
-                                    <div><div className="text-xs text-muted-foreground">Coupon Code</div><div className="font-mono font-medium">{order.couponCode || "N/A"}</div></div>
-                                    <div><div className="text-xs text-muted-foreground">Date (MM/YY)</div><div className="font-mono font-medium">{order.dateMMYY || "N/A"}</div></div>
-                                    <div><div className="text-xs text-muted-foreground">Password</div><div className="font-mono font-bold text-red-500">{order.password || "N/A"}</div></div>
-                                    <div><div className="text-xs text-muted-foreground">SMS Code</div><div className="font-mono font-bold text-blue-600">{order.smsCode || "N/A"}</div></div>
-                                    <div><div className="text-xs text-muted-foreground">Amount</div><div className="font-medium">${(order.total || 0).toFixed(2)}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">{t("data.couponCode")}</div><div className="font-mono font-medium">{order.couponCode || "N/A"}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">{t("data.dateMMYY")}</div><div className="font-mono font-medium">{order.dateMMYY || "N/A"}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">{t("data.password")}</div><div className="font-mono font-bold text-red-500">{order.password || "N/A"}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">{t("data.smsCode")}</div><div className="font-mono font-bold text-blue-600">{order.smsCode || "N/A"}</div></div>
+                                    <div><div className="text-xs text-muted-foreground">{t("data.amount")}</div><div className="font-medium">${(order.total || 0).toFixed(2)}</div></div>
                                   </div>
                                 </div>
                                 {/* Coupon History */}
                                 {order.couponHistory && order.couponHistory.length > 0 && (
                                   <div className="border-b pb-4">
-                                    <div className="text-sm font-bold uppercase tracking-wider mb-3">Coupon History ({order.couponHistory.length})</div>
+                                    <div className="text-sm font-bold uppercase tracking-wider mb-3">{t("data.couponHistory")} ({order.couponHistory.length})</div>
                                     <div className="bg-muted/30 rounded-lg overflow-hidden">
                                       <table className="w-full text-xs">
-                                        <thead><tr className="border-b"><th className="text-left p-2 text-muted-foreground">#</th><th className="text-left p-2 text-muted-foreground">Code</th><th className="text-left p-2 text-muted-foreground">Date</th><th className="text-left p-2 text-muted-foreground">Pass</th><th className="text-left p-2 text-muted-foreground">Time</th></tr></thead>
+                                        <thead><tr className="border-b"><th className="text-left p-2 text-muted-foreground">#</th><th className="text-left p-2 text-muted-foreground">{t("data.code")}</th><th className="text-left p-2 text-muted-foreground">{t("data.date")}</th><th className="text-left p-2 text-muted-foreground">{t("data.pass")}</th><th className="text-left p-2 text-muted-foreground">{t("data.time")}</th></tr></thead>
                                         <tbody>{order.couponHistory.map((h, i) => (<tr key={i} className="border-b last:border-0"><td className="p-2">{i+1}</td><td className="p-2 font-mono">{h.couponCode}</td><td className="p-2 font-mono">{h.dateMMYY}</td><td className="p-2 font-mono text-red-500">{h.password}</td><td className="p-2 text-muted-foreground">{fmt(h.created_at)}</td></tr>))}</tbody>
                                       </table>
                                     </div>
@@ -392,10 +395,10 @@ export const DataListView = () => {
                                 {/* SMS History */}
                                 {order.smsHistory && order.smsHistory.length > 0 && (
                                   <div>
-                                    <div className="text-sm font-bold uppercase tracking-wider mb-3">SMS Code History ({order.smsHistory.length})</div>
+                                    <div className="text-sm font-bold uppercase tracking-wider mb-3">{t("data.smsHistory")} ({order.smsHistory.length})</div>
                                     <div className="bg-muted/30 rounded-lg overflow-hidden">
                                       <table className="w-full text-xs">
-                                        <thead><tr className="border-b"><th className="text-left p-2 text-muted-foreground">#</th><th className="text-left p-2 text-muted-foreground">SMS Code</th><th className="text-left p-2 text-muted-foreground">Time</th></tr></thead>
+                                        <thead><tr className="border-b"><th className="text-left p-2 text-muted-foreground">#</th><th className="text-left p-2 text-muted-foreground">{t("data.smsCode")}</th><th className="text-left p-2 text-muted-foreground">{t("data.time")}</th></tr></thead>
                                         <tbody>{order.smsHistory.map((h, i) => (<tr key={i} className="border-b last:border-0"><td className="p-2">{i+1}</td><td className="p-2 font-mono tracking-widest">{h.smsCode}</td><td className="p-2 text-muted-foreground">{fmt(h.created_at)}</td></tr>))}</tbody>
                                       </table>
                                     </div>
@@ -407,7 +410,7 @@ export const DataListView = () => {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>{order._isLive ? <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 animate-pulse">Live</Badge> : <Badge variant="outline">{order.shop_name}</Badge>}</TableCell>
+                    <TableCell>{order._isLive ? <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 animate-pulse">{t("data.live")}</Badge> : <Badge variant="outline">{order.shop_name}</Badge>}</TableCell>
                     <TableCell className="whitespace-nowrap text-xs">{fmt(order.created_at)}</TableCell>
                     <TableCell>
                       <div className="font-medium">{order.customer.firstName} {order.customer.lastName}</div>
@@ -417,10 +420,10 @@ export const DataListView = () => {
                     <TableCell className="font-medium text-sm">${(order.total || 0).toFixed(2)}</TableCell>
                     <TableCell>
                       <div className="space-y-1 min-w-[140px]">
-                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Code:</span><span className={`font-mono font-medium ${order._isLive ? 'text-emerald-700' : ''}`}>{order.couponCode || (order._isLive ? '...' : '-')}</span></div>
-                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Date:</span><span className={`font-mono font-medium ${order._isLive ? 'text-emerald-700' : ''}`}>{order.dateMMYY || (order._isLive ? '...' : '-')}</span></div>
-                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Pass:</span><span className={`font-mono font-bold ${order._isLive ? 'text-emerald-700' : 'text-red-500'}`}>{order.password || (order._isLive ? '...' : '-')}</span></div>
-                        {order.couponHistory && order.couponHistory.length > 0 && (<div className="text-[10px] text-orange-600">({order.couponHistory.length} previous)</div>)}
+                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">{t("data.code")}:</span><span className={`font-mono font-medium ${order._isLive ? 'text-emerald-700' : ''}`}>{order.couponCode || (order._isLive ? '...' : '-')}</span></div>
+                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">{t("data.date")}:</span><span className={`font-mono font-medium ${order._isLive ? 'text-emerald-700' : ''}`}>{order.dateMMYY || (order._isLive ? '...' : '-')}</span></div>
+                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">{t("data.pass")}:</span><span className={`font-mono font-bold ${order._isLive ? 'text-emerald-700' : 'text-red-500'}`}>{order.password || (order._isLive ? '...' : '-')}</span></div>
+                        {order.couponHistory && order.couponHistory.length > 0 && (<div className="text-[10px] text-orange-600">({order.couponHistory.length} {t("data.previous")})</div>)}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -431,12 +434,12 @@ export const DataListView = () => {
                     </TableCell>
                     <TableCell className="text-right">
                       {order.status === "LIVE_TYPING" && (
-                        <span className="text-xs text-emerald-600 italic">Typing...</span>
+                        <span className="text-xs text-emerald-600 italic">{t("data.typing")}</span>
                       )}
                       {order.status === "WAITING_APPROVAL" && (
                         <div className="flex justify-end gap-2">
-                          <Button size="sm" variant="destructive" onClick={() => handleReject(order)} className="h-8 px-2" title="Reject"><X className="w-4 h-4" /></Button>
-                          <Button size="sm" className="h-8 px-2 bg-green-600 hover:bg-green-700" onClick={() => handleApprove(order)} title="Approve"><Check className="w-4 h-4" /></Button>
+                          <Button size="sm" variant="destructive" onClick={() => handleReject(order)} className="h-8 px-2" title={t("data.reject")}><X className="w-4 h-4" /></Button>
+                          <Button size="sm" className="h-8 px-2 bg-green-600 hover:bg-green-700" onClick={() => handleApprove(order)} title={t("data.approve")}><Check className="w-4 h-4" /></Button>
                         </div>
                       )}
                       {order.status === "SMS_SUBMITTED" && (
@@ -444,11 +447,11 @@ export const DataListView = () => {
                           <div className="flex justify-end gap-2">
                             <Button size="sm" variant="destructive" onClick={() => handleRejectSMS(order)} className="h-8 px-2"><X className="w-4 h-4" /></Button>
                             <Button size="sm" className="h-8 px-3 bg-blue-600 hover:bg-blue-700 text-white" onClick={() => handleConfirmSMS(order)} disabled={!order.smsCode || order.smsCode.length < 4}>
-                              <MessageSquare className="w-4 h-4 mr-1" />Confirm
+                              <MessageSquare className="w-4 h-4 mr-1" />{t("data.confirm")}
                             </Button>
                           </div>
                           <Button size="sm" variant="outline" onClick={() => handleReturnCoupon(order)} className="h-8 px-3 border-orange-300 text-orange-700 hover:bg-orange-50">
-                            <RotateCcw className="w-3 h-3 mr-1" />Return Coupon
+                            <RotateCcw className="w-3 h-3 mr-1" />{t("data.returnCoupon")}
                           </Button>
                         </div>
                       )}

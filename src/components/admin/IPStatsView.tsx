@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Shield, Users, Globe, AlertTriangle, RefreshCw } from "lucide-react";
 import { useAdminAuth } from "@/context/AdminAuthContext";
+import { useAdminLocale } from "@/context/AdminLocaleContext";
 import {
   Table,
   TableBody,
@@ -41,6 +42,7 @@ interface IpLogRow {
 
 export const IPStatsView = () => {
   const { getAuthHeaders, clearAuth } = useAdminAuth();
+  const { t } = useAdminLocale();
   const [stats, setStats] = useState<IpStats | null>(null);
   const [logs, setLogs] = useState<IpLogRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,12 +85,12 @@ export const IPStatsView = () => {
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">IP 访客统计</h2>
-          <p className="text-muted-foreground text-sm mt-1">访客风险与拦截统计</p>
+          <h2 className="text-2xl font-bold tracking-tight">{t("ipstats.title")}</h2>
+          <p className="text-muted-foreground text-sm mt-1">{t("ipstats.subtitle")}</p>
         </div>
         <Button variant="outline" size="sm" onClick={load} disabled={loading}>
           <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-          刷新
+          {t("ipstats.refresh")}
         </Button>
       </div>
 
@@ -97,37 +99,37 @@ export const IPStatsView = () => {
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">今日</CardTitle>
+                <CardTitle className="text-sm font-medium">{t("ipstats.today")}</CardTitle>
                 <Users className="w-4 h-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{stats.today.total}</div>
                 <p className="text-xs text-muted-foreground">
-                  总访客 · 拦截 {stats.today.blocked}（{stats.today.rate}%）
+                  {t("ipstats.totalChecks")} · {t("ipstats.blocked")} {stats.today.blocked}（{stats.today.rate}%）
                 </p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">本周</CardTitle>
+                <CardTitle className="text-sm font-medium">{t("ipstats.week")}</CardTitle>
                 <Shield className="w-4 h-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{stats.week.total}</div>
                 <p className="text-xs text-muted-foreground">
-                  总访客 · 拦截 {stats.week.blocked}（{stats.week.rate}%）
+                  {t("ipstats.totalChecks")} · {t("ipstats.blocked")} {stats.week.blocked}（{stats.week.rate}%）
                 </p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">本月</CardTitle>
+                <CardTitle className="text-sm font-medium">{t("ipstats.month")}</CardTitle>
                 <AlertTriangle className="w-4 h-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{stats.month.total}</div>
                 <p className="text-xs text-muted-foreground">
-                  总访客 · 拦截 {stats.month.blocked}（{stats.month.rate}%）
+                  {t("ipstats.totalChecks")} · {t("ipstats.blocked")} {stats.month.blocked}（{stats.month.rate}%）
                 </p>
               </CardContent>
             </Card>
@@ -136,8 +138,8 @@ export const IPStatsView = () => {
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">威胁类型分布（本月）</CardTitle>
-                <CardDescription>按 action / threat 统计</CardDescription>
+                <CardTitle className="text-sm">{t("ipstats.threatDist")}</CardTitle>
+                <CardDescription>{t("ipstats.threatDistDesc")}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-2">
@@ -147,7 +149,7 @@ export const IPStatsView = () => {
                     </Badge>
                   ))}
                   {Object.keys(stats.threatDistribution || {}).length === 0 && (
-                    <span className="text-muted-foreground text-sm">暂无数据</span>
+                    <span className="text-muted-foreground text-sm">{t("ipstats.noData")}</span>
                   )}
                 </div>
               </CardContent>
@@ -155,7 +157,7 @@ export const IPStatsView = () => {
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm flex items-center gap-2">
-                  <Globe className="w-4 h-4" /> 国家/地区来源（本月）
+                  <Globe className="w-4 h-4" /> {t("ipstats.countrySource")}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -169,7 +171,7 @@ export const IPStatsView = () => {
                       </Badge>
                     ))}
                   {Object.keys(stats.countryDistribution || {}).length === 0 && (
-                    <span className="text-muted-foreground text-sm">暂无数据</span>
+                    <span className="text-muted-foreground text-sm">{t("ipstats.noData")}</span>
                   )}
                 </div>
               </CardContent>
@@ -180,26 +182,26 @@ export const IPStatsView = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">最近拦截记录</CardTitle>
-          <CardDescription>IP、原因、时间、域名、动作</CardDescription>
+          <CardTitle className="text-sm">{t("ipstats.recentLogs")}</CardTitle>
+          <CardDescription>{t("ipstats.recentLogsDesc")}</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>IP</TableHead>
-                <TableHead>域名</TableHead>
-                <TableHead>原因</TableHead>
-                <TableHead>国家</TableHead>
-                <TableHead>动作</TableHead>
-                <TableHead>时间</TableHead>
+                <TableHead>{t("ipstats.domain")}</TableHead>
+                <TableHead>{t("ipstats.reason")}</TableHead>
+                <TableHead>{t("data.country")}</TableHead>
+                <TableHead>{t("ipstats.action")}</TableHead>
+                <TableHead>{t("data.time")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {blockedLogs.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center text-muted-foreground">
-                    暂无拦截记录
+                    {t("ipstats.noBlockLogs")}
                   </TableCell>
                 </TableRow>
               ) : (

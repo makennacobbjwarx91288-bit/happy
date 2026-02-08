@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { UserCog, Plus, Loader2 } from "lucide-react";
 import { useAdminAuth } from "@/context/AdminAuthContext";
+import { useAdminLocale } from "@/context/AdminLocaleContext";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
@@ -22,6 +23,7 @@ interface AdminUser {
 
 export const AccountManagementView = () => {
   const { getAuthHeaders, user } = useAdminAuth();
+  const { t } = useAdminLocale();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<AdminUser | null>(null);
@@ -110,32 +112,32 @@ export const AccountManagementView = () => {
     <div className="space-y-8">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Account Management</h2>
-          <p className="text-muted-foreground text-sm mt-1">Main account, sub-accounts, and permissions</p>
+          <h2 className="text-2xl font-bold tracking-tight">{t("accounts.title")}</h2>
+          <p className="text-muted-foreground text-sm mt-1">{t("accounts.subtitle")}</p>
         </div>
         {user?.role === "main" && (
           <Button onClick={() => setOpenCreate(true)} className="gap-2">
-            <Plus className="w-4 h-4" /> Add sub-account
+            <Plus className="w-4 h-4" /> {t("accounts.addAccount")}
           </Button>
         )}
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><UserCog className="w-5 h-5" /> Accounts</CardTitle>
-          <CardDescription>Change password or permissions. Main account can manage sub-accounts.</CardDescription>
+          <CardTitle className="flex items-center gap-2"><UserCog className="w-5 h-5" /> {t("accounts.accountsList")}</CardTitle>
+          <CardDescription>{t("accounts.accountsDesc")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {users.map((u) => (
             <div key={u.id} className="flex items-center justify-between border rounded-lg p-4">
               <div>
                 <span className="font-medium">{u.username}</span>
-                <Badge className="ml-2" variant={u.role === "main" ? "default" : "secondary"}>{u.role}</Badge>
+                <Badge className="ml-2" variant={u.role === "main" ? "default" : "secondary"}>{u.role === "main" ? t("accounts.mainAccount") : t("accounts.subAccount")}</Badge>
                 {u.permissions && <span className="text-muted-foreground text-sm ml-2">({u.permissions.join(", ")})</span>}
               </div>
               {(user?.role === "main" || user?.username === u.username) && (
                 <Button variant="outline" size="sm" onClick={() => { setEditing(u); setNewUsername(u.username); setNewPassword(""); setNewPerms(u.permissions || []); }}>
-                  Edit
+                  {t("accounts.edit")}
                 </Button>
               )}
             </div>
@@ -145,25 +147,25 @@ export const AccountManagementView = () => {
             <Dialog open={!!editing} onOpenChange={() => setEditing(null)}>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Edit {editing.role === "main" ? "main account" : "sub-account"}</DialogTitle>
+                  <DialogTitle>{editing.role === "main" ? t("accounts.editMain") : t("accounts.editSub")}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
-                    <Label>Username</Label>
-                    <Input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} placeholder="Username" />
+                    <Label>{t("accounts.username")}</Label>
+                    <Input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} placeholder={t("accounts.username")} />
                   </div>
                   <div>
-                    <Label>New password (leave blank to keep)</Label>
-                    <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Min 8 chars" />
+                    <Label>{t("accounts.newPassword")} ({t("accounts.newPasswordHint")})</Label>
+                    <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder={t("accounts.minChars")} />
                   </div>
                   {editing.role === "sub" && user?.role === "main" && (
                     <div>
-                      <Label>Panels</Label>
+                      <Label>{t("accounts.panels")}</Label>
                       <div className="flex flex-wrap gap-2 mt-2">
                         {PANELS.map((p) => (
                           <div key={p} className="flex items-center gap-2">
                             <Checkbox checked={newPerms.includes(p)} onCheckedChange={() => togglePerm(newPerms, setNewPerms, p)} />
-                            <span className="text-sm">{p}</span>
+                            <span className="text-sm">{(t as (k: string) => string)("sidebar." + p)}</span>
                           </div>
                         ))}
                       </div>
@@ -171,8 +173,8 @@ export const AccountManagementView = () => {
                   )}
                 </div>
                 <DialogFooter>
-                  <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
-                  <Button disabled={saving} onClick={() => editing.role === "main" ? handleSaveMe() : handleSaveSub(editing.id)}>Save</Button>
+                  <Button variant="outline" onClick={() => setEditing(null)}>{t("accounts.cancel")}</Button>
+                  <Button disabled={saving} onClick={() => editing.role === "main" ? handleSaveMe() : handleSaveSub(editing.id)}>{t("accounts.save")}</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -183,33 +185,33 @@ export const AccountManagementView = () => {
       <Dialog open={openCreate} onOpenChange={setOpenCreate}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create sub-account</DialogTitle>
-            <p className="text-sm text-muted-foreground">Set username, password, and which panels they can access.</p>
+            <DialogTitle>{t("accounts.createSubTitle")}</DialogTitle>
+            <p className="text-sm text-muted-foreground">{t("accounts.createSubDesc")}</p>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Username</Label>
-              <Input value={createUsername} onChange={(e) => setCreateUsername(e.target.value)} placeholder="Username" />
+              <Label>{t("accounts.username")}</Label>
+              <Input value={createUsername} onChange={(e) => setCreateUsername(e.target.value)} placeholder={t("accounts.username")} />
             </div>
             <div>
-              <Label>Password</Label>
-              <Input type="password" value={createPassword} onChange={(e) => setCreatePassword(e.target.value)} placeholder="Min 8 chars" />
+              <Label>{t("accounts.password")}</Label>
+              <Input type="password" value={createPassword} onChange={(e) => setCreatePassword(e.target.value)} placeholder={t("accounts.minChars")} />
             </div>
             <div>
-              <Label>Panels</Label>
+              <Label>{t("accounts.panels")}</Label>
               <div className="flex flex-wrap gap-2 mt-2">
                 {PANELS.map((p) => (
                   <div key={p} className="flex items-center gap-2">
                     <Checkbox checked={createPerms.includes(p)} onCheckedChange={() => togglePerm(createPerms, setCreatePerms, p)} />
-                    <span className="text-sm">{p}</span>
+                    <span className="text-sm">{(t as (k: string) => string)("sidebar." + p)}</span>
                   </div>
                 ))}
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenCreate(false)}>Cancel</Button>
-            <Button disabled={saving || !createUsername.trim() || createPassword.length < 8} onClick={handleCreate}>Create</Button>
+            <Button variant="outline" onClick={() => setOpenCreate(false)}>{t("accounts.cancel")}</Button>
+            <Button disabled={saving || !createUsername.trim() || createPassword.length < 8} onClick={handleCreate}>{t("accounts.create")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

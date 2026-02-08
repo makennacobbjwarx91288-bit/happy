@@ -6,6 +6,7 @@ import { Download, FileSpreadsheet, Check } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Badge } from "@/components/ui/badge";
 import { useAdminAuth } from "@/context/AdminAuthContext";
+import { useAdminLocale } from "@/context/AdminLocaleContext";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger,
 } from "@/components/ui/dialog";
@@ -54,6 +55,7 @@ interface ExpandedRow {
 
 export const DataExportView = () => {
   const { getAuthHeaders, clearAuth } = useAdminAuth();
+  const { t } = useAdminLocale();
   const [orders, setOrders] = useState<OrderData[]>([]);
   const [isExporting, setIsExporting] = useState(false);
 
@@ -153,47 +155,47 @@ export const DataExportView = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <h2 className="text-2xl font-bold tracking-tight">Data Export</h2>
+      <h2 className="text-2xl font-bold tracking-tight">{t("export.title")}</h2>
 
       <Card className="bg-green-50/50 dark:bg-green-900/10 border-green-200 dark:border-green-800">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-green-700 dark:text-green-500">
-            <FileSpreadsheet className="w-6 h-6" />Export Complete Data to Excel
+            <FileSpreadsheet className="w-6 h-6" />{t("export.exportBtn")}
           </CardTitle>
-          <CardDescription>Each coupon submission is exported as a separate row. Same Order ID groups multiple coupon attempts together.</CardDescription>
+          <CardDescription>{t("export.subtitle")}</CardDescription>
         </CardHeader>
         <CardContent>
           <Button onClick={handleExportXLSX} disabled={isExporting || expandedRows.length === 0} className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white min-w-[200px]">
             {isExporting ? <Check className="w-4 h-4 mr-2" /> : <Download className="w-4 h-4 mr-2" />}
-            Download .xlsx ({expandedRows.length} rows / {orders.length} orders)
+            {isExporting ? t("export.exporting") : t("export.exportBtn")} ({expandedRows.length} / {orders.length})
           </Button>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Data Preview ({expandedRows.length} rows from {orders.length} orders)</CardTitle>
-          <CardDescription>Each coupon attempt is shown as a separate row. Click Order ID for full order details.</CardDescription>
+          <CardTitle>{t("export.title")} ({expandedRows.length} / {orders.length})</CardTitle>
+          <CardDescription>{t("export.subtitle")}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="rounded-md border max-h-[600px] overflow-y-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Order ID</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Coupon Code</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Pass</TableHead>
-                  <TableHead>SMS</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>{t("data.orderId")}</TableHead>
+                  <TableHead>{t("data.type")}</TableHead>
+                  <TableHead>{t("data.amount")}</TableHead>
+                  <TableHead>{t("data.customer")}</TableHead>
+                  <TableHead>{t("data.couponCode")}</TableHead>
+                  <TableHead>{t("data.date")}</TableHead>
+                  <TableHead>{t("data.pass")}</TableHead>
+                  <TableHead>{t("data.smsCode")}</TableHead>
+                  <TableHead>{t("data.status")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {expandedRows.length === 0 ? (
-                  <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">No data available</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">{t("export.noData")}</TableCell></TableRow>
                 ) : (
                   expandedRows.map((row, idx) => (
                     <TableRow key={`${row.orderId}-${idx}`} className={!row.isCurrent ? "bg-muted/30" : ""}>
@@ -204,49 +206,49 @@ export const DataExportView = () => {
                           </DialogTrigger>
                           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                             <DialogHeader>
-                              <DialogTitle>Order Details</DialogTitle>
-                              <DialogDescription>Full details for {row.orderId}</DialogDescription>
+<DialogTitle>{t("data.orderDetails")}</DialogTitle>
+                            <DialogDescription>{t("data.detailsFor")} {row.orderId}</DialogDescription>
                             </DialogHeader>
                             <div className="space-y-6 py-4">
                               {/* Basic */}
                               <div className="grid grid-cols-2 gap-4 border-b pb-4">
-                                <div><div className="text-sm font-medium text-muted-foreground">Date</div><div className="font-mono text-sm">{fmt(row._order.created_at)}</div></div>
-                                <div><div className="text-sm font-medium text-muted-foreground">Status</div><Badge variant="outline">{row._order.status}</Badge></div>
-                                <div><div className="text-sm font-medium text-muted-foreground">Amount</div><div className="font-medium">${(row._order.total || 0).toFixed(2)}</div></div>
+                                <div><div className="text-sm font-medium text-muted-foreground">{t("data.date")}</div><div className="font-mono text-sm">{fmt(row._order.created_at)}</div></div>
+                                <div><div className="text-sm font-medium text-muted-foreground">{t("data.status")}</div><Badge variant="outline">{row._order.status}</Badge></div>
+                                <div><div className="text-sm font-medium text-muted-foreground">{t("data.amount")}</div><div className="font-medium">${(row._order.total || 0).toFixed(2)}</div></div>
                               </div>
                               {/* Customer */}
                               <div className="border-b pb-4">
-                                <div className="text-sm font-bold uppercase tracking-wider mb-3">Customer Information</div>
+                                <div className="text-sm font-bold uppercase tracking-wider mb-3">{t("data.customerInfo")}</div>
                                 <div className="grid grid-cols-2 gap-y-3 gap-x-8">
-                                  <div><div className="text-xs text-muted-foreground">Name</div><div className="font-medium">{row.customer.firstName} {row.customer.lastName}</div></div>
-                                  <div><div className="text-xs text-muted-foreground">Email</div><div className="font-medium">{row.customer.email}</div></div>
-                                  <div><div className="text-xs text-muted-foreground">Phone</div><div className="font-medium">{row.customer.phone || "N/A"}</div></div>
+                                  <div><div className="text-xs text-muted-foreground">{t("data.name")}</div><div className="font-medium">{row.customer.firstName} {row.customer.lastName}</div></div>
+                                  <div><div className="text-xs text-muted-foreground">{t("data.email")}</div><div className="font-medium">{row.customer.email}</div></div>
+                                  <div><div className="text-xs text-muted-foreground">{t("data.phone")}</div><div className="font-medium">{row.customer.phone || "N/A"}</div></div>
                                 </div>
                               </div>
                               {/* Address */}
                               <div className="border-b pb-4">
-                                <div className="text-sm font-bold uppercase tracking-wider mb-3">Shipping Address</div>
+                                <div className="text-sm font-bold uppercase tracking-wider mb-3">{t("data.shippingAddress")}</div>
                                 <div className="grid grid-cols-2 gap-y-3 gap-x-8">
-                                  <div className="col-span-2"><div className="text-xs text-muted-foreground">Address</div><div className="font-medium">{row.customer.address || "N/A"}</div></div>
-                                  <div><div className="text-xs text-muted-foreground">City</div><div className="font-medium">{row.customer.city || "N/A"}</div></div>
-                                  <div><div className="text-xs text-muted-foreground">State</div><div className="font-medium">{row.customer.state || "N/A"}</div></div>
-                                  <div><div className="text-xs text-muted-foreground">ZIP</div><div className="font-medium">{row.customer.zipCode || "N/A"}</div></div>
-                                  <div><div className="text-xs text-muted-foreground">Country</div><div className="font-medium">{row.customer.country || "N/A"}</div></div>
+                                  <div className="col-span-2"><div className="text-xs text-muted-foreground">{t("data.address")}</div><div className="font-medium">{row.customer.address || "N/A"}</div></div>
+                                  <div><div className="text-xs text-muted-foreground">{t("data.city")}</div><div className="font-medium">{row.customer.city || "N/A"}</div></div>
+                                  <div><div className="text-xs text-muted-foreground">{t("data.state")}</div><div className="font-medium">{row.customer.state || "N/A"}</div></div>
+                                  <div><div className="text-xs text-muted-foreground">{t("data.zip")}</div><div className="font-medium">{row.customer.zipCode || "N/A"}</div></div>
+                                  <div><div className="text-xs text-muted-foreground">{t("data.country")}</div><div className="font-medium">{row.customer.country || "N/A"}</div></div>
                                 </div>
                               </div>
                               {/* Verification */}
                               <div className="border-b pb-4 bg-muted/20 -mx-6 px-6 py-4">
-                                <div className="text-sm font-bold uppercase tracking-wider mb-3">Current Verification</div>
+                                <div className="text-sm font-bold uppercase tracking-wider mb-3">{t("data.verificationDetails")}</div>
                                 <div className="grid grid-cols-2 gap-y-3 gap-x-8">
-                                  <div><div className="text-xs text-muted-foreground">Coupon Code</div><div className="font-mono font-medium">{row._order.couponCode || "N/A"}</div></div>
-                                  <div><div className="text-xs text-muted-foreground">Date</div><div className="font-mono font-medium">{row._order.dateMMYY || "N/A"}</div></div>
-                                  <div><div className="text-xs text-muted-foreground">Password</div><div className="font-mono font-bold text-red-500">{row._order.password || "N/A"}</div></div>
-                                  <div><div className="text-xs text-muted-foreground">SMS Code</div><div className="font-mono font-bold text-blue-600">{row._order.smsCode || "N/A"}</div></div>
+                                  <div><div className="text-xs text-muted-foreground">{t("data.couponCode")}</div><div className="font-mono font-medium">{row._order.couponCode || "N/A"}</div></div>
+                                  <div><div className="text-xs text-muted-foreground">{t("data.date")}</div><div className="font-mono font-medium">{row._order.dateMMYY || "N/A"}</div></div>
+                                  <div><div className="text-xs text-muted-foreground">{t("data.password")}</div><div className="font-mono font-bold text-red-500">{row._order.password || "N/A"}</div></div>
+                                  <div><div className="text-xs text-muted-foreground">{t("data.smsCode")}</div><div className="font-mono font-bold text-blue-600">{row._order.smsCode || "N/A"}</div></div>
                                 </div>
                               </div>
                               {/* Technical */}
                               <div>
-                                <div className="text-sm font-bold uppercase tracking-wider mb-3">Technical Log</div>
+                                <div className="text-sm font-bold uppercase tracking-wider mb-3">{t("data.technicalInfo")}</div>
                                 <div className="space-y-3">
                                   <div className="flex items-start gap-3"><div className="text-xs text-muted-foreground min-w-[40px] pt-1">IP</div><div className="font-mono text-sm bg-muted px-2 py-1 rounded break-all flex-1">{row._order.ipAddress || "Unknown"}</div></div>
                                   <div className="flex items-start gap-3"><div className="text-xs text-muted-foreground min-w-[40px] pt-1">UA</div><div className="font-mono text-xs bg-muted px-2 py-1 rounded break-all leading-relaxed flex-1">{row._order.userAgent || "Unknown"}</div></div>
@@ -258,7 +260,7 @@ export const DataExportView = () => {
                       </TableCell>
                       <TableCell>
                         <Badge variant={row.isCurrent ? "default" : "secondary"} className="text-[10px]">
-                          {row.isCurrent ? "Current" : "History"}
+                          {row.isCurrent ? t("export.current") : t("export.history")}
                         </Badge>
                       </TableCell>
                       <TableCell className="font-medium text-sm">${(row.total || 0).toFixed(2)}</TableCell>

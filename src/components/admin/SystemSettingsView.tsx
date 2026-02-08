@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Settings, Key, Loader2, CheckCircle, XCircle } from "lucide-react";
 import { useAdminAuth } from "@/context/AdminAuthContext";
+import { useAdminLocale } from "@/context/AdminLocaleContext";
 
 const API_URL = import.meta.env.DEV ? "http://localhost:3001" : (import.meta.env.VITE_API_URL ?? "");
 
@@ -18,6 +19,7 @@ interface SettingsData {
 
 export const SystemSettingsView = () => {
   const { getAuthHeaders, clearAuth } = useAdminAuth();
+  const { t } = useAdminLocale();
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
@@ -87,48 +89,48 @@ export const SystemSettingsView = () => {
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight">System Settings</h2>
-        <p className="text-muted-foreground text-sm mt-1">API keys and IP protection provider</p>
+        <h2 className="text-2xl font-bold tracking-tight">{t("system.title")}</h2>
+        <p className="text-muted-foreground text-sm mt-1">{t("system.subtitle")}</p>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Key className="w-5 h-5" /> IP API (ipregistry)
+            <Key className="w-5 h-5" /> {t("system.apiSection")}
           </CardTitle>
           <CardDescription>
-            Used for visitor IP risk checks. You can replace the backend module to use another provider later.
+            {t("system.apiDesc")}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>API Key</Label>
+            <Label>{t("system.apiKeyLabel")}</Label>
             <div className="flex gap-2">
               <Input
                 type="password"
-                placeholder="Your ipregistry.co API key"
+                placeholder={t("system.apiKeyPlaceholder")}
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 className="max-w-md"
               />
               <Button onClick={saveApiKey} disabled={saving}>
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("system.save")}
               </Button>
             </div>
           </div>
           {total != null && (
             <div className="space-y-2">
-              <Label>Quota</Label>
+              <Label>{t("system.quotaLabel")}</Label>
               <div className="flex items-center gap-4 text-sm">
-                <span>Used: {used ?? "—"}</span>
-                <span>Remaining: {remaining ?? "—"}</span>
+                <span>{t("system.quotaUsed")}: {used ?? "—"}</span>
+                <span>{t("system.quotaRemaining")}: {remaining ?? "—"}</span>
                 <span className="text-muted-foreground">Total: {total}</span>
               </div>
               <Progress value={pct} className="h-2 max-w-xs" />
             </div>
           )}
           <div className="flex flex-wrap items-center gap-2">
-            <Label className="w-full sm:w-auto">Test lookup</Label>
+            <Label className="w-full sm:w-auto">{t("system.testLookup")}</Label>
             <Input
               placeholder="8.8.8.8"
               value={testIp}
@@ -136,9 +138,9 @@ export const SystemSettingsView = () => {
               className="w-32 font-mono"
             />
             <Button variant="outline" size="sm" onClick={runTest} disabled={testing}>
-              {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Test"}
+              {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : t("system.testApi")}
             </Button>
-            {testResult?.ok && <span className="text-green-600 flex items-center gap-1"><CheckCircle className="w-4 h-4" /> OK</span>}
+            {testResult?.ok && <span className="text-green-600 flex items-center gap-1"><CheckCircle className="w-4 h-4" /> {t("system.testOk")}</span>}
             {testResult?.error && <span className="text-destructive flex items-center gap-1"><XCircle className="w-4 h-4" /> {testResult.error}</span>}
           </div>
         </CardContent>
@@ -147,10 +149,10 @@ export const SystemSettingsView = () => {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Settings className="w-5 h-5" /> API 切换说明
+            <Settings className="w-5 h-5" /> {t("system.apiSwitchTitle")}
           </CardTitle>
           <CardDescription>
-            当前使用 ipregistry.co。若需更换为其他 IP 风控服务商，只需在服务端替换 <code className="text-xs bg-muted px-1 rounded">server/ipcheck.js</code> 模块，保持对外接口（lookup / testApiKey）一致即可。
+            {t("system.apiSwitchDesc")}
           </CardDescription>
         </CardHeader>
       </Card>

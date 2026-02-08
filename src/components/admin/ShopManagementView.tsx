@@ -28,27 +28,16 @@ import {
 const API_URL = import.meta.env.DEV ? "http://localhost:3001" : (import.meta.env.VITE_API_URL ?? "");
 
 const DISALLOWED_TYPE_OPTIONS = [
-  { id: "proxy", label: "代理" },
-  { id: "vpn", label: "VPN" },
-  { id: "tor", label: "Tor网络" },
-  { id: "datacenter", label: "云服务商" },
-  { id: "relay", label: "中继服务器" },
-  { id: "threat", label: "威胁" },
-  { id: "abuser", label: "滥用者" },
-  { id: "attacker", label: "攻击者" },
-  { id: "bogon", label: "虚假IP" },
+  "proxy", "vpn", "tor", "datacenter", "relay", "threat", "abuser", "attacker", "bogon",
 ] as const;
 
 const ACTION_OPTIONS = [
-  { value: "captcha", label: "人机验证页面" },
-  { value: "redirect", label: "重定向" },
-  { value: "404", label: "404" },
+  { value: "captcha" as const },
+  { value: "redirect" as const },
+  { value: "404" as const },
 ] as const;
 
-// 源码/模板选择：仅展示已有源码，无 mock。当前仅胡须店。
-const SHOP_TEMPLATE_OPTIONS = [
-  { value: "beard", label: "胡须店" },
-] as const;
+const SHOP_TEMPLATE_OPTIONS = [{ value: "beard" as const }] as const;
 
 interface DomainEntry {
   id: number;
@@ -222,11 +211,11 @@ export const ShopManagementView = () => {
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Shop Management</h2>
-          <p className="text-muted-foreground text-sm mt-1">Manage shops and their domain bindings</p>
+          <h2 className="text-2xl font-bold tracking-tight">{t("shops.pageTitle")}</h2>
+          <p className="text-muted-foreground text-sm mt-1">{t("shops.manageShops")}</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="icon" onClick={loadShops} disabled={isLoading} title="Refresh">
+          <Button variant="outline" size="icon" onClick={loadShops} disabled={isLoading} title={t("data.refresh")}>
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </Button>
           <Dialog>
@@ -247,7 +236,7 @@ export const ShopManagementView = () => {
                     </SelectTrigger>
                     <SelectContent>
                       {SHOP_TEMPLATE_OPTIONS.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        <SelectItem key={opt.value} value={opt.value}>{t("shops.templateBeard")}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -255,11 +244,11 @@ export const ShopManagementView = () => {
                 </div>
                 <div className="space-y-2">
                   <Label>{t("shops.shopName")}</Label>
-                  <Input placeholder="My Shop" value={newShopName} onChange={e => setNewShopName(e.target.value)} />
+                  <Input placeholder={t("shops.shopNamePlaceholder")} value={newShopName} onChange={e => setNewShopName(e.target.value)} />
                 </div>
                 <div className="space-y-2">
                   <Label>{t("shops.primaryDomain")}</Label>
-                  <Input placeholder="shop.example.com" value={newShopDomain} onChange={e => setNewShopDomain(e.target.value)} />
+                  <Input placeholder={t("shops.domainPlaceholder")} value={newShopDomain} onChange={e => setNewShopDomain(e.target.value)} />
                   <p className="text-xs text-muted-foreground">{t("shops.domainHint")}</p>
                 </div>
               </div>
@@ -306,17 +295,17 @@ export const ShopManagementView = () => {
                             <Edit2 className="w-3 h-3" />
                           </Button>
                         </CardTitle>
-                        <CardDescription>ID: {shop.id} | Primary: {shop.domain}</CardDescription>
+                        <CardDescription>{t("shops.idLabel")}: {shop.id} | {t("shops.primary")}: {shop.domain}</CardDescription>
                         {shop.template && (
                           <Badge variant="secondary" className="text-[10px] mt-1">
-                            {SHOP_TEMPLATE_OPTIONS.find(o => o.value === shop.template)?.label ?? shop.template}
+                            {shop.template === "beard" ? t("shops.templateBeard") : shop.template}
                           </Badge>
                         )}
                       </div>
                     )}
                   </div>
                   <Badge variant="outline" className="text-xs">
-                    {1 + shop.domains.length} domain{shop.domains.length > 0 ? 's' : ''}
+                    {1 + shop.domains.length}{t("shops.domainsCount")}
                   </Badge>
                 </div>
               </CardHeader>
@@ -351,18 +340,18 @@ export const ShopManagementView = () => {
                   {/* Add new domain */}
                   <div className="flex items-center gap-2 pt-2">
                     <Input
-                      placeholder="Add domain (e.g. shop2.example.com)"
+                      placeholder={t("shops.addDomainPlaceholder")}
                       value={newDomainInputs[shop.id] || ''}
                       onChange={e => setNewDomainInputs(prev => ({ ...prev, [shop.id]: e.target.value }))}
                       className="flex-1 h-9 font-mono text-sm"
                       onKeyDown={e => { if (e.key === 'Enter') addDomain(shop.id); }}
                     />
                     <Button size="sm" onClick={() => addDomain(shop.id)} className="h-9 px-3">
-                      <Plus className="w-4 h-4 mr-1" />Add
+                      <Plus className="w-4 h-4 mr-1" />{t("shops.addDomainBtn")}
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Supports any domain or subdomain. Make sure DNS is pointed to the server via Cloudflare (A record, orange cloud ON).
+                    {t("shops.dnsHint")}
                   </p>
                 </div>
 
@@ -377,41 +366,41 @@ export const ShopManagementView = () => {
                 >
                   <CollapsibleTrigger asChild>
                     <button type="button" className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
-                      <Shield className="w-4 h-4" /> IP 防护策略
+                      <Shield className="w-4 h-4" /> {t("shops.ipProtection")}
                     </button>
                   </CollapsibleTrigger>
                   <CollapsibleContent className="pt-4 space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="flex items-center justify-between">
-                        <Label className="text-sm">阻止爬虫</Label>
+                        <Label className="text-sm">{t("shops.blockBots")}</Label>
                         <Switch
                           checked={(ipRules[shop.id]?.block_bots ?? 0) === 1}
                           onCheckedChange={(v) => updateIpRule(shop.id, { block_bots: v ? 1 : 0 })}
                         />
                       </div>
                       <div className="flex items-center justify-between">
-                        <Label className="text-sm">阻止电脑用户</Label>
+                        <Label className="text-sm">{t("shops.blockDesktop")}</Label>
                         <Switch
                           checked={(ipRules[shop.id]?.block_desktop ?? 0) === 1}
                           onCheckedChange={(v) => updateIpRule(shop.id, { block_desktop: v ? 1 : 0 })}
                         />
                       </div>
                       <div className="flex items-center justify-between">
-                        <Label className="text-sm">禁止安卓用户</Label>
+                        <Label className="text-sm">{t("shops.blockAndroid")}</Label>
                         <Switch
                           checked={(ipRules[shop.id]?.block_android ?? 0) === 1}
                           onCheckedChange={(v) => updateIpRule(shop.id, { block_android: v ? 1 : 0 })}
                         />
                       </div>
                       <div className="flex items-center justify-between">
-                        <Label className="text-sm">禁止苹果用户</Label>
+                        <Label className="text-sm">{t("shops.blockApple")}</Label>
                         <Switch
                           checked={(ipRules[shop.id]?.block_apple ?? 0) === 1}
                           onCheckedChange={(v) => updateIpRule(shop.id, { block_apple: v ? 1 : 0 })}
                         />
                       </div>
                       <div className="flex items-center justify-between sm:col-span-2">
-                        <Label className="text-sm">被截的IP更换设备继续拦截</Label>
+                        <Label className="text-sm">{t("shops.blockAfterIntercept")}</Label>
                         <Switch
                           checked={(ipRules[shop.id]?.block_after_intercept ?? 0) === 1}
                           onCheckedChange={(v) => updateIpRule(shop.id, { block_after_intercept: v ? 1 : 0 })}
@@ -419,22 +408,22 @@ export const ShopManagementView = () => {
                       </div>
                     </div>
                     <div>
-                      <Label className="text-sm mb-2 block">不允许进入的类型</Label>
+                      <Label className="text-sm mb-2 block">{t("shops.disallowedTypes")}</Label>
                       <div className="flex flex-wrap gap-3">
-                        {DISALLOWED_TYPE_OPTIONS.map(opt => (
-                          <div key={opt.id} className="flex items-center space-x-2">
+                        {DISALLOWED_TYPE_OPTIONS.map(id => (
+                          <div key={id} className="flex items-center space-x-2">
                             <Checkbox
-                              id={`${shop.id}-${opt.id}`}
-                              checked={(ipRules[shop.id]?.disallowed_types || []).includes(opt.id)}
-                              onCheckedChange={() => toggleDisallowed(shop.id, opt.id)}
+                              id={`${shop.id}-${id}`}
+                              checked={(ipRules[shop.id]?.disallowed_types || []).includes(id)}
+                              onCheckedChange={() => toggleDisallowed(shop.id, id)}
                             />
-                            <label htmlFor={`${shop.id}-${opt.id}`} className="text-sm cursor-pointer">{opt.label}</label>
+                            <label htmlFor={`${shop.id}-${id}`} className="text-sm cursor-pointer">{t(`ip.${id}`)}</label>
                           </div>
                         ))}
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
-                      <Label className="text-sm">拦截后动作</Label>
+                      <Label className="text-sm">{t("shops.actionAfterBlock")}</Label>
                       <Select
                         value={ipRules[shop.id]?.action_taken || 'captcha'}
                         onValueChange={(v) => updateIpRule(shop.id, { action_taken: v })}
@@ -444,13 +433,13 @@ export const ShopManagementView = () => {
                         </SelectTrigger>
                         <SelectContent>
                           {ACTION_OPTIONS.map(opt => (
-                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                            <SelectItem key={opt.value} value={opt.value}>{t(`ip.${opt.value}`)}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
                     <Button size="sm" onClick={() => saveIpRules(shop.id)} disabled={savingRules === shop.id}>
-                      {savingRules === shop.id ? "保存中..." : "保存防护策略"}
+                      {savingRules === shop.id ? t("shops.saving") : t("shops.saveIpRules")}
                     </Button>
                   </CollapsibleContent>
                 </Collapsible>
