@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +26,7 @@ export const SystemSettingsView = () => {
   const [testResult, setTestResult] = useState<{ ok?: boolean; error?: string } | null>(null);
   const [testing, setTesting] = useState(false);
 
-  const loadSettings = async () => {
+  const loadSettings = useCallback(async () => {
     try {
       const res = await fetch(`${API_URL}/api/admin/settings`, { headers: getAuthHeaders() });
       if (res.status === 401) { clearAuth(); return; }
@@ -36,11 +36,11 @@ export const SystemSettingsView = () => {
     } catch (err) {
       console.error("Failed to load settings", err);
     }
-  };
+  }, [getAuthHeaders, clearAuth]);
 
   useEffect(() => {
     loadSettings();
-  }, []);
+  }, [loadSettings]);
 
   const saveApiKey = async () => {
     setSaving(true);

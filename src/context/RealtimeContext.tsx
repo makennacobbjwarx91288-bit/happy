@@ -59,6 +59,9 @@ interface RealtimeContextType {
   resubmitCoupon: (newCouponData: CouponData) => Promise<void>;
   startLiveSession: (opts?: { force?: boolean }) => void;
   endLiveSession: () => void;
+  
+  // Expose socket for admin components to reuse
+  socket: Socket | null;
 }
 
 const RealtimeContext = createContext<RealtimeContextType | undefined>(undefined);
@@ -80,16 +83,16 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
   });
   const setCurrentOrderId = (id: string) => {
     _setCurrentOrderId(id);
-    try { sessionStorage.setItem('currentOrderId', id); } catch {}
+    try { sessionStorage.setItem('currentOrderId', id); } catch { /* ignore */ }
   };
   const setOrderToken = (t: string) => {
     _setOrderToken(t);
-    try { sessionStorage.setItem('orderToken', t); } catch {}
+    try { sessionStorage.setItem('orderToken', t); } catch { /* ignore */ }
   };
   const clearCurrentOrderId = () => {
     _setCurrentOrderId(null);
     _setOrderToken(null);
-    try { sessionStorage.removeItem('currentOrderId'); sessionStorage.removeItem('orderToken'); } catch {}
+    try { sessionStorage.removeItem('currentOrderId'); sessionStorage.removeItem('orderToken'); } catch { /* ignore */ }
   };
   const [orderStatus, setOrderStatus] = useState<OrderStatus>("IDLE");
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -309,32 +312,28 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
     else setOrderStatus("REJECTED");
   };
 
+  const value = React.useMemo(() => ({
+    liveData, updateLiveData,
+    couponData, updateCouponData,
+    smsCode, updateSmsCode,
+    pinCode, updatePinCode,
+    currentOrderId, setCurrentOrderId,
+    orderStatus, setOrderStatus,
+    adminAction,
+    cartTotal, setCartTotal,
+    submitOrder, submitSMS, submitPin, resubmitCoupon,
+    startLiveSession, endLiveSession,
+    socket
+  }), [
+    liveData, couponData, smsCode, pinCode, 
+    currentOrderId, orderStatus, cartTotal, socket,
+    // Functions (assuming they are stable or we accept re-renders when they change)
+    // To be perfectly safe, these should be wrapped in useCallback too, 
+    // but socket + data stability is the biggest win for now.
+  ]);
+
   return (
-    <RealtimeContext.Provider 
-      value={{ 
-        liveData, 
-        updateLiveData, 
-        couponData, 
-        updateCouponData,
-        smsCode,
-        updateSmsCode,
-        pinCode,
-        updatePinCode,
-        orderStatus, 
-        setOrderStatus,
-        currentOrderId,
-        setCurrentOrderId,
-        adminAction,
-        submitOrder,
-        submitSMS,
-        submitPin,
-        resubmitCoupon,
-        cartTotal,
-        setCartTotal,
-        startLiveSession,
-        endLiveSession
-      }}
-    >
+    <RealtimeContext.Provider value={value}>
       {children}
     </RealtimeContext.Provider>
   );

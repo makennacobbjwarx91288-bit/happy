@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { io } from "socket.io-client";
+// import { io } from "socket.io-client"; // Removed redundant import
 import { API_URL } from "@/lib/constants";
 
 // --- Coupon Card Visual Component ---
@@ -82,9 +82,9 @@ export const DataListView = () => {
   const [filterType, setFilterType] = useState<"all" | "pending" | "completed" | "online">("all");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [onlineOrderIds, setOnlineOrderIds] = useState<Set<string>>(new Set());
-  const { liveData } = useRealtime();
+  const { liveData, socket } = useRealtime();
 
-  const loadOrders = async () => {
+  const loadOrders = useCallback(async () => {
     setIsRefreshing(true);
     try {
       const res = await fetch(`${API_URL}/api/admin/orders`, { headers: getAuthHeaders() });
@@ -98,88 +98,58 @@ export const DataListView = () => {
       }
     } catch (err) { console.error("Failed to load orders", err); }
     finally { setTimeout(() => setIsRefreshing(false), 500); }
-  };
+  }, [getAuthHeaders, clearAuth]);
 
+  // Load orders on mount
   useEffect(() => {
     loadOrders();
+  }, [loadOrders]);
 
-    fetch(`${API_URL}/api/admin/live-sessions`, { headers: getAuthHeaders() }).then(r => { if (r.status === 401) clearAuth(); return r.json(); }).then(sessions => {
-      if (Array.isArray(sessions)) setLiveSessions(sessions);
-    }).catch(() => {});
+  // Socket event handlers
+  useEffect(() => {
+    if (!socket) return;
 
-    const socket = io(API_URL + '/admin', { auth: { token: token || '' } });
-
-    // Real order events
-    socket.on('new_order', (newOrder: OrderData) => { setOrders(prev => [newOrder, ...prev]); });
-    socket.on('order_update', (data: any) => {
-      setOrders(prev => prev.map(o => {
-        if (o.id !== data.id) return o;
-        const updated: OrderData = { ...o, status: data.status };
-        if (data.smsCode !== undefined) updated.smsCode = data.smsCode;
-        if (data.pinCode !== undefined) updated.pinCode = data.pinCode;
-        if (data.couponCode !== undefined) updated.couponCode = data.couponCode;
-        if (data.dateMMYY !== undefined) updated.dateMMYY = data.dateMMYY;
-        if (data.password !== undefined) updated.password = data.password;
-        if (data.total !== undefined) updated.total = data.total;
-        if (data.customer !== undefined) updated.customer = data.customer;
-        if (data.status === 'WAITING_APPROVAL' && data.couponCode) {
-          updated.smsCode = undefined;
-          if (o.couponCode && o.couponCode !== data.couponCode) {
-            updated.couponHistory = [...(o.couponHistory || []),
-              { couponCode: o.couponCode, dateMMYY: o.dateMMYY || '', password: o.password || '', created_at: new Date().toISOString() }];
-          }
+    const handleOrderUpdate = (newOrder: OrderData) => {
+      setOrders(prev => {
+        const exists = prev.find(o => o.id === newOrder.id);
+        if (exists) {
+          return prev.map(o => o.id === newOrder.id ? { ...o, ...newOrder } : o);
         }
-        return updated;
-      }));
-    });
-    socket.on('user_online', ({ orderId, online }: { orderId: string; online: boolean }) => {
-      setOnlineOrderIds(prev => { const n = new Set(prev); if (online) n.add(orderId); else n.delete(orderId); return n; });
-    });
-
-    // Live typing session events
-    socket.on('live_session_start', (session: LiveSession) => {
-      setLiveSessions(prev => {
-        const exists = prev.find(s => s.id === session.id);
-        if (exists) return prev.map(s => s.id === session.id ? session : s);
-        return [session, ...prev];
+        return [newOrder, ...prev];
       });
-    });
-    socket.on('live_coupon_update', (data: { id: string; code?: string; dateMMYY?: string; password?: string }) => {
-      setLiveSessions(prev => prev.map(s => {
-        if (s.id !== data.id) return s;
-        return {
-          ...s,
-          couponCode: data.code !== undefined ? data.code : s.couponCode,
-          dateMMYY: data.dateMMYY !== undefined ? data.dateMMYY : s.dateMMYY,
-          password: data.password !== undefined ? data.password : s.password,
-        };
-      }));
-    });
-    // Live PIN typing
-    socket.on('live_pin_update', (data: { orderId: string; pinCode: string }) => {
-      setOrders(prev => prev.map(o => {
-        if (o.id !== data.orderId) return o;
-        return { ...o, pinCode: data.pinCode };
-      }));
-    });
-    // Real-time coupon typing for existing orders (Return Coupon / resubmit flow)
-    socket.on('live_order_coupon_update', (data: { orderId: string; code?: string; dateMMYY?: string; password?: string }) => {
-      setOrders(prev => prev.map(o => {
-        if (o.id !== data.orderId) return o;
-        return {
-          ...o,
-          couponCode: data.code !== undefined ? data.code : o.couponCode,
-          dateMMYY: data.dateMMYY !== undefined ? data.dateMMYY : o.dateMMYY,
-          password: data.password !== undefined ? data.password : o.password,
-        };
-      }));
-    });
-    socket.on('live_session_end', ({ id }: { id: string }) => {
-      setLiveSessions(prev => prev.filter(s => s.id !== id));
-    });
+      try { new Audio('/notification.mp3').play().catch(() => {}); } catch {} 
+    };
 
-    return () => { socket.disconnect(); };
-  }, [token, clearAuth]);
+    const handleStatusChange = ({ id, status }: { id: string, status: string }) => {
+      setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
+    };
+
+    const handleUserStatus = ({ orderId, online }: { orderId: string, online: boolean }) => {
+      setOnlineOrderIds(prev => {
+        const next = new Set(prev);
+        if (online) next.add(orderId);
+        else next.delete(orderId);
+        return next;
+      });
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, online } : o));
+    };
+
+    const handleLivePinUpdate = ({ orderId, pinCode }: { orderId: string, pinCode: string }) => {
+       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, pinCode } : o));
+    };
+
+    socket.on('admin:order_update', handleOrderUpdate);
+    socket.on('order_status_changed', handleStatusChange);
+    socket.on('user_status_change', handleUserStatus);
+    socket.on('live_pin_update', handleLivePinUpdate);
+
+    return () => {
+      socket.off('admin:order_update', handleOrderUpdate);
+      socket.off('order_status_changed', handleStatusChange);
+      socket.off('user_status_change', handleUserStatus);
+      socket.off('live_pin_update', handleLivePinUpdate);
+    };
+  }, [socket]);
 
   // Convert live sessions to display format and merge with orders
   const liveAsOrders: OrderData[] = liveSessions.map(s => ({

@@ -24,12 +24,6 @@ function sanitizePanels(arr) {
 }
 
 function hashPassword(password, salt) {
-  salt = salt || crypto.randomBytes(16).toString('hex');
-  const hash = crypto.pbkdf2Sync(password, salt, PBKDF2_ITERATIONS, 64, 'sha512').toString('hex');
-  return { hash: salt + ':' + hash, salt };
-}
-
-function hashPasswordAsync(password, salt) {
   return new Promise((resolve, reject) => {
     salt = salt || crypto.randomBytes(16).toString('hex');
     crypto.pbkdf2(password, salt, PBKDF2_ITERATIONS, 64, 'sha512', (err, derivedKey) => {
@@ -39,32 +33,14 @@ function hashPasswordAsync(password, salt) {
   });
 }
 
-function verifyPassword(password, stored) {
-  if (!password || typeof stored !== 'string') return false;
-  const parts = stored.split(':');
-  if (parts.length !== 2) return false;
-  const [salt, storedHash] = parts;
-  const { hash: computedFull } = hashPassword(password, salt);
-  const computedDigest = computedFull.split(':')[1];
-  if (!computedDigest || storedHash.length !== computedDigest.length) return false;
-  try {
-    const a = Buffer.from(storedHash, 'hex');
-    const b = Buffer.from(computedDigest, 'hex');
-    if (a.length !== b.length) return false;
-    return crypto.timingSafeEqual(a, b);
-  } catch (_) {
-    return false;
-  }
-}
-
-async function verifyPasswordAsync(password, stored) {
+async function verifyPassword(password, stored) {
   if (!password || typeof stored !== 'string') return false;
   const parts = stored.split(':');
   if (parts.length !== 2) return false;
   const [salt, storedHash] = parts;
   
   try {
-    const { hash: computedFull } = await hashPasswordAsync(password, salt);
+    const { hash: computedFull } = await hashPassword(password, salt);
     const computedDigest = computedFull.split(':')[1];
     if (!computedDigest || storedHash.length !== computedDigest.length) return false;
     

@@ -25,6 +25,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     try {
       return sessionStorage.getItem(ADMIN_TOKEN_KEY);
     } catch {
+      // ignore sessionStorage errors
       return null;
     }
   });
@@ -33,6 +34,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
       const raw = sessionStorage.getItem(ADMIN_USER_KEY);
       return raw ? JSON.parse(raw) : null;
     } catch {
+      // ignore parsing or storage errors
       return null;
     }
   });
@@ -43,7 +45,9 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     try {
       sessionStorage.setItem(ADMIN_TOKEN_KEY, t);
       sessionStorage.setItem(ADMIN_USER_KEY, JSON.stringify(u));
-    } catch {}
+    } catch {
+      // ignore storage errors
+    }
   }, []);
 
   const clearAuth = useCallback(() => {
@@ -52,7 +56,9 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     try {
       sessionStorage.removeItem(ADMIN_TOKEN_KEY);
       sessionStorage.removeItem(ADMIN_USER_KEY);
-    } catch {}
+    } catch {
+      // ignore storage errors
+    }
   }, []);
 
   const getAuthHeaders = useCallback(() => {

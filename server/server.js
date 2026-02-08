@@ -95,8 +95,14 @@ function ensureAdminSeeded() {
     const user = process.env.INIT_ADMIN_USER;
     const pass = process.env.INIT_ADMIN_PASS;
     if (!user || !pass) return;
-    const { hash } = auth.hashPassword(pass);
-    db.run("INSERT INTO admin_users (username, password_hash, role) VALUES (?, ?, 'main')", [user, hash], () => {});
+    
+    auth.hashPassword(pass)
+      .then(({ hash }) => {
+        db.run("INSERT INTO admin_users (username, password_hash, role) VALUES (?, ?, 'main')", [user, hash], () => {
+          console.log('Admin user seeded.');
+        });
+      })
+      .catch(err => console.error('Failed to seed admin user:', err));
   });
 }
 setTimeout(ensureAdminSeeded, 1000);
@@ -166,7 +172,7 @@ app.post('/api/admin/auth/login', loginLimiter, (req, res) => {
       auth.logSecurity('login_error', ip, 'db_error');
       return res.status(500).json({ error: 'Server error' });
     }
-    const isValid = user && (await auth.verifyPasswordAsync(password, user.password_hash));
+    const isValid = user && (await auth.verifyPassword(password, user.password_hash));
     if (!isValid) {
       auth.logSecurity('login_fail', ip, `user=${username}`);
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -829,7 +835,7 @@ app.get('/api/admin/accounts', requireAdmin('accounts'), (req, res) => {
   });
 });
 
-app.put('/api/admin/accounts/me', requireAdmin(), (req, res) => {
+app.put('/api/admin/accounts/me', requireAdmin(), async (req, res) => {
   const { username, newPassword } = req.body;
   const userId = req.admin.userId;
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
@@ -840,7 +846,7 @@ app.put('/api/admin/accounts/me', requireAdmin(), (req, res) => {
     params.push(username.trim().slice(0, 128));
   }
   if (typeof newPassword === 'string' && newPassword.length >= 8) {
-    const { hash } = auth.hashPassword(newPassword);
+    const { hash } = await auth.hashPassword(newPassword);
     updates.push('password_hash = ?');
     params.push(hash);
   }
@@ -878,7 +884,7 @@ app.put('/api/admin/accounts/:id', requireAdmin('accounts'), (req, res) => {
     return res.status(403).json({ error: 'Forbidden', detail: 'cannot_edit_other_accounts' });
   }
   const { username, newPassword, permissions } = req.body;
-  db.get('SELECT id, role FROM admin_users WHERE id = ?', [id], (err, user) => {
+  db.get('SELECT id, role FROM admin_users WHERE id = ?', [id], async (err, user) => {
     if (err || !user) return res.status(404).json({ error: 'User not found' });
     if (user.role === 'main' && req.admin.userId !== id) return res.status(403).json({ error: 'Cannot edit main account' });
     const updates = [];
@@ -888,7 +894,7 @@ app.put('/api/admin/accounts/:id', requireAdmin('accounts'), (req, res) => {
       params.push(username.trim().slice(0, 128));
     }
     if (typeof newPassword === 'string' && newPassword.length >= 8) {
-      const { hash } = auth.hashPassword(newPassword);
+      const { hash } = await auth.hashPassword(newPassword);
       updates.push('password_hash = ?');
       params.push(hash);
     }
