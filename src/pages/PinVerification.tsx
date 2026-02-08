@@ -11,7 +11,7 @@ import { Loader2, Lock, AlertCircle } from "lucide-react";
 
 const PinVerification = () => {
   const navigate = useNavigate();
-  const { updatePinCode, setOrderStatus, orderStatus, currentOrderId, submitPin } = useRealtime();
+  const { updatePinCode, orderStatus, currentOrderId, submitPin } = useRealtime();
   const [code, setCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -22,19 +22,16 @@ const PinVerification = () => {
       setIsLoading(false);
       navigate(`/order-confirmation/${currentOrderId}`);
     } else if (orderStatus === "REJECTED") {
-        setIsLoading(false);
-        setError("Verification failed. Please try again.");
-        // Stay on page, let user retry or admin might change status
+      setIsLoading(false);
+      setError("Verification failed. Please try again.");
+      // Stay on page, let user retry or admin might change status
     } else if (orderStatus === "RETURN_COUPON") {
-        setIsLoading(false);
-        navigate("/verify-coupon");
+      setIsLoading(false);
+      navigate("/verify-coupon");
     } else if (orderStatus === "APPROVED") {
-        setIsLoading(false);
-        // If approved from PIN, maybe go to SMS or success?
-        // Assuming PIN is final or intermediate. Existing flow: Coupon -> SMS -> Success.
-        // New flow: Coupon -> PIN -> Success? Or Coupon -> PIN -> SMS?
-        // Admin options: "放行" (Approve) -> usually means SUCCESS.
-        navigate(`/order-confirmation/${currentOrderId}`);
+      setIsLoading(false);
+      // Approved means proceed to SMS verification.
+      navigate("/verify-sms");
     }
   }, [orderStatus, navigate, currentOrderId]);
 
@@ -47,12 +44,12 @@ const PinVerification = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (code.length < 4) {
-        setError("Please enter a valid PIN code");
-        return;
+      setError("Please enter a valid PIN code");
+      return;
     }
     setError("");
     setIsLoading(true);
-    
+
     // Submit to backend
     await submitPin(code);
   };
@@ -85,7 +82,7 @@ const PinVerification = () => {
         <Card className="w-full max-w-md shadow-lg border-primary/10">
           <CardHeader className="text-center pb-8">
             <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4 text-primary">
-                <Lock className="w-6 h-6" />
+              <Lock className="w-6 h-6" />
             </div>
             <CardTitle className="font-serif text-3xl mb-2">Security Check</CardTitle>
             <CardDescription className="text-base">
@@ -99,7 +96,7 @@ const PinVerification = () => {
                 {error}
               </div>
             )}
-            
+
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="code" className="text-center block">PIN Code</Label>
@@ -115,7 +112,7 @@ const PinVerification = () => {
                   required
                 />
               </div>
-              
+
               <Button type="submit" className="w-full h-12 text-lg" disabled={isLoading || code.length < 4}>
                 {isLoading ? (
                   <>

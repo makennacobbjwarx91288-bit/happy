@@ -5,6 +5,12 @@ import { useCart } from "@/context/CartContext";
 import { useShop } from "@/context/ShopContext";
 import { CartSheet } from "./CartSheet";
 import { Link } from "react-router-dom";
+import { getActiveThemeV2, getLegacyLayout } from "@/lib/theme-editor";
+
+interface HeaderNavLink {
+  label: string;
+  href: string;
+}
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -12,22 +18,47 @@ const Header = () => {
   const { config } = useShop();
   const shopName = config?.name || "Shop";
 
-  const headerConfig = config?.layout_config?.header || {};
-  const announcementEnabled = headerConfig.announcementEnabled !== false;
-  const announcementText = headerConfig.announcementText || "Norse Winter Beard Oil Available Now";
+  const themeV2 = getActiveThemeV2(config as unknown as Record<string, unknown>);
+  const legacyLayout = getLegacyLayout(config as unknown as Record<string, unknown>);
+  const legacyHeaderRaw =
+    legacyLayout && typeof legacyLayout === "object" && !Array.isArray(legacyLayout)
+      ? (legacyLayout["header"] as unknown)
+      : null;
+  const legacyHeader =
+    legacyHeaderRaw && typeof legacyHeaderRaw === "object" && !Array.isArray(legacyHeaderRaw)
+      ? (legacyHeaderRaw as Record<string, unknown>)
+      : {};
+  const headerConfig: Record<string, unknown> = themeV2?.header
+    ? (themeV2.header as unknown as Record<string, unknown>)
+    : legacyHeader;
 
-  const defaultLinks = [
+  const announcementEnabled = headerConfig["announcementEnabled"] !== false;
+  const announcementText =
+    typeof headerConfig["announcementText"] === "string"
+      ? headerConfig["announcementText"]
+      : "Norse Winter Beard Oil Available Now";
+
+  const defaultLinks: HeaderNavLink[] = [
     { label: "Shop", href: "/shop" },
     { label: "Deals", href: "/deals" },
-    { label: "Beard", href: "/category/beard" },
-    { label: "Hair", href: "/category/hair" },
-    { label: "Body", href: "/category/body" },
-    { label: "Fragrances", href: "/category/fragrances" }
+    { label: "Beard", href: "/beard" },
+    { label: "Hair", href: "/hair" },
+    { label: "Body", href: "/body" },
+    { label: "Fragrances", href: "/fragrances" }
   ];
 
-  const navLinks = (headerConfig.navLinks && headerConfig.navLinks.length > 0) 
-    ? headerConfig.navLinks 
-    : defaultLinks;
+  const navLinksRaw = Array.isArray(headerConfig["navLinks"]) ? headerConfig["navLinks"] : [];
+  const navLinks: HeaderNavLink[] =
+    navLinksRaw.length > 0
+      ? navLinksRaw
+          .map((item) => {
+            if (!item || typeof item !== "object") return null;
+            const row = item as { label?: unknown; href?: unknown };
+            if (typeof row.label !== "string" || typeof row.href !== "string") return null;
+            return { label: row.label, href: row.href };
+          })
+          .filter((item): item is HeaderNavLink => Boolean(item))
+      : defaultLinks;
 
   return (
     <>
@@ -63,7 +94,7 @@ const Header = () => {
 
             {/* Desktop Navigation */}
             <nav className="hidden lg:flex items-center gap-8">
-              {navLinks.map((link: any, index: number) => (
+              {navLinks.map((link, index) => (
                 <motion.div
                   key={link.label}
                   initial={{ opacity: 0, y: -10 }}
@@ -116,7 +147,7 @@ const Header = () => {
               className="lg:hidden border-t border-border overflow-hidden"
             >
               <nav className="flex flex-col py-4">
-                {navLinks.map((link: any) => (
+                {navLinks.map((link) => (
                   <Link
                     key={link.label}
                     to={link.href}

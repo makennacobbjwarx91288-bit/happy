@@ -15,7 +15,11 @@ export interface ShopConfig {
   name: string;
   logo_url: string;
   theme_color: string;
-  layout_config?: any;
+  layout_config?: unknown;
+  layout_config_v2?: unknown;
+  theme_draft_v2?: unknown;
+  layout_schema_version?: number;
+  theme_editor_v2_enabled?: number | boolean;
 }
 
 interface ShopContextType {
@@ -75,6 +79,24 @@ export const ShopProvider = ({ children }: { children: ReactNode }) => {
           } catch (e) {
             console.error("Failed to parse layout_config", e);
             data.layout_config = {};
+          }
+        }
+
+        if (data.layout_config_v2 && typeof data.layout_config_v2 === 'string') {
+          try {
+            data.layout_config_v2 = JSON.parse(data.layout_config_v2);
+          } catch (e) {
+            console.error("Failed to parse layout_config_v2", e);
+            data.layout_config_v2 = null;
+          }
+        }
+
+        if (data.theme_draft_v2 && typeof data.theme_draft_v2 === 'string') {
+          try {
+            data.theme_draft_v2 = JSON.parse(data.theme_draft_v2);
+          } catch (e) {
+            console.error("Failed to parse theme_draft_v2", e);
+            data.theme_draft_v2 = null;
           }
         }
 

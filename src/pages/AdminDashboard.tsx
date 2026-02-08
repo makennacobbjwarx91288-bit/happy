@@ -5,6 +5,7 @@ import { DashboardView } from "@/components/admin/DashboardView";
 import { DataListView } from "@/components/admin/DataListView";
 import { DataExportView } from "@/components/admin/DataExportView";
 import { ShopManagementView } from "@/components/admin/ShopManagementView";
+import { ShopDesignView } from "@/components/admin/ShopDesignView";
 import { SystemSettingsView } from "@/components/admin/SystemSettingsView";
 import { IPStatsView } from "@/components/admin/IPStatsView";
 import { AccountManagementView } from "@/components/admin/AccountManagementView";

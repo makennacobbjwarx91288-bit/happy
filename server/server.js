@@ -295,6 +295,307 @@ function setSetting(key, value, cb) {
   );
 }
 
+const THEME_V2_SCHEMA_VERSION = 2;
+const DEFAULT_NAV_LINKS = [
+  { label: 'Shop', href: '/shop' },
+  { label: 'Deals', href: '/deals' },
+  { label: 'Beard', href: '/beard' },
+  { label: 'Hair', href: '/hair' },
+  { label: 'Body', href: '/body' },
+  { label: 'Fragrances', href: '/fragrances' },
+];
+
+function safeJsonParse(raw, fallback) {
+  if (raw == null || raw === '') return fallback;
+  if (typeof raw === 'object') return raw;
+  if (typeof raw !== 'string') return fallback;
+  try {
+    return JSON.parse(raw);
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function asText(value, fallback = '', maxLen = 200) {
+  if (typeof value !== 'string') return fallback;
+  const clean = value.replace(/\s+/g, ' ').trim();
+  if (!clean) return fallback;
+  return clean.slice(0, maxLen);
+}
+
+function asBool(value, fallback = false) {
+  if (typeof value === 'boolean') return value;
+  if (value === 1 || value === '1') return true;
+  if (value === 0 || value === '0') return false;
+  return fallback;
+}
+
+function clampInt(value, fallback, min, max) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(n)));
+}
+
+function normalizeNavLinks(raw) {
+  const fromInput = Array.isArray(raw) ? raw : [];
+  const links = [];
+  const seen = new Set();
+  for (const item of fromInput) {
+    if (!item || typeof item !== 'object') continue;
+    const label = asText(item.label, '', 30);
+    const href = asText(item.href, '', 120);
+    if (!label || !href) continue;
+    const key = `${label}::${href}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    links.push({ label, href });
+    if (links.length >= 12) break;
+  }
+  return links.length > 0 ? links : DEFAULT_NAV_LINKS.map((link) => ({ ...link }));
+}
+
+function getDefaultThemeV2() {
+  return {
+    schema_version: THEME_V2_SCHEMA_VERSION,
+    tokens: {
+      contentWidth: 'normal',
+      radius: 'none',
+      surface: 'default',
+    },
+    header: {
+      announcementEnabled: true,
+      announcementText: 'Norse Winter Beard Oil Available Now',
+      navLinks: DEFAULT_NAV_LINKS,
+    },
+    footer: {
+      description: 'Premium grooming essentials for modern routines.',
+      motto: 'Keep on Growing',
+      socialLinks: [
+        { name: 'Instagram', href: '#' },
+        { name: 'YouTube', href: '#' },
+      ],
+    },
+    home: {
+      sections: [
+        {
+          id: 'hero-1',
+          type: 'hero',
+          enabled: true,
+          settings: {
+            title: 'Keep on Growing',
+            subtitle: 'Premium beard care made for everyday confidence.',
+            ctaText: 'Shop Now',
+            ctaLink: '/shop',
+            backgroundImage: '',
+          },
+        },
+        {
+          id: 'product-grid-1',
+          type: 'product_grid',
+          enabled: true,
+          settings: {
+            title: 'The Collection',
+            itemsPerPage: 8,
+            showFilters: true,
+          },
+        },
+        {
+          id: 'tagline-1',
+          type: 'tagline',
+          enabled: true,
+          settings: {
+            text: 'KEEP ON GROWING',
+          },
+        },
+        {
+          id: 'brand-story-1',
+          type: 'brand_story',
+          enabled: true,
+          settings: {
+            kicker: 'Our Story',
+            title: 'Crafted for the Modern Gentleman',
+            body:
+              'We build reliable, premium grooming products that fit real routines. Every release is focused on comfort, confidence, and daily consistency.',
+            buttonText: 'Learn More',
+            buttonLink: '/about',
+          },
+        },
+      ],
+    },
+  };
+}
+
+function normalizeSection(section, index) {
+  const typeRaw = asText(section && section.type, '', 30).toLowerCase();
+  const type = ['hero', 'product_grid', 'tagline', 'brand_story', 'rich_text'].includes(typeRaw)
+    ? typeRaw
+    : 'rich_text';
+  const id = asText(section && section.id, `${type}-${index + 1}`, 80).replace(/[^\w-]/g, '-');
+  const enabled = asBool(section && section.enabled, true);
+  const input = section && section.settings && typeof section.settings === 'object' ? section.settings : {};
+
+  if (type === 'hero') {
+    return {
+      id,
+      type,
+      enabled,
+      settings: {
+        title: asText(input.title, 'Keep on Growing', 120),
+        subtitle: asText(input.subtitle, 'Premium beard care made for everyday confidence.', 240),
+        ctaText: asText(input.ctaText, 'Shop Now', 40),
+        ctaLink: asText(input.ctaLink, '/shop', 120),
+        backgroundImage: asText(input.backgroundImage, '', 500),
+      },
+    };
+  }
+
+  if (type === 'product_grid') {
+    return {
+      id,
+      type,
+      enabled,
+      settings: {
+        title: asText(input.title, 'The Collection', 80),
+        itemsPerPage: clampInt(input.itemsPerPage, 8, 4, 24),
+        showFilters: asBool(input.showFilters, true),
+      },
+    };
+  }
+
+  if (type === 'tagline') {
+    return {
+      id,
+      type,
+      enabled,
+      settings: {
+        text: asText(input.text, 'KEEP ON GROWING', 120),
+      },
+    };
+  }
+
+  if (type === 'brand_story') {
+    return {
+      id,
+      type,
+      enabled,
+      settings: {
+        kicker: asText(input.kicker, 'Our Story', 40),
+        title: asText(input.title, 'Crafted for the Modern Gentleman', 120),
+        body: asText(input.body, 'We build products that make daily routines simpler and better.', 900),
+        buttonText: asText(input.buttonText, 'Learn More', 40),
+        buttonLink: asText(input.buttonLink, '/about', 120),
+      },
+    };
+  }
+
+  return {
+    id,
+    type: 'rich_text',
+    enabled,
+    settings: {
+      heading: asText(input.heading, 'Custom Section', 80),
+      body: asText(input.body, 'Use this block for promos, notices, or campaign copy.', 1200),
+      align: ['left', 'center', 'right'].includes(asText(input.align, 'left', 10)) ? asText(input.align, 'left', 10) : 'left',
+    },
+  };
+}
+
+function normalizeThemeV2(input) {
+  const base = getDefaultThemeV2();
+  const source = input && typeof input === 'object' ? input : {};
+
+  const tokenWidth = asText(source.tokens && source.tokens.contentWidth, base.tokens.contentWidth, 20);
+  const tokenRadius = asText(source.tokens && source.tokens.radius, base.tokens.radius, 20);
+  const tokenSurface = asText(source.tokens && source.tokens.surface, base.tokens.surface, 20);
+
+  const sectionsRaw = Array.isArray(source.home && source.home.sections) ? source.home.sections : base.home.sections;
+  const sections = [];
+  for (let i = 0; i < sectionsRaw.length && i < 30; i += 1) {
+    sections.push(normalizeSection(sectionsRaw[i], i));
+  }
+  if (sections.length === 0) {
+    sections.push(...base.home.sections);
+  }
+
+  const socialRaw = Array.isArray(source.footer && source.footer.socialLinks) ? source.footer.socialLinks : base.footer.socialLinks;
+  const socialLinks = [];
+  for (const item of socialRaw) {
+    if (!item || typeof item !== 'object') continue;
+    const name = asText(item.name, '', 30);
+    const href = asText(item.href, '', 120);
+    if (!name || !href) continue;
+    socialLinks.push({ name, href });
+    if (socialLinks.length >= 10) break;
+  }
+
+  return {
+    schema_version: THEME_V2_SCHEMA_VERSION,
+    tokens: {
+      contentWidth: ['narrow', 'normal', 'wide'].includes(tokenWidth) ? tokenWidth : base.tokens.contentWidth,
+      radius: ['none', 'sm', 'md', 'lg'].includes(tokenRadius) ? tokenRadius : base.tokens.radius,
+      surface: ['default', 'soft', 'outline'].includes(tokenSurface) ? tokenSurface : base.tokens.surface,
+    },
+    header: {
+      announcementEnabled: asBool(source.header && source.header.announcementEnabled, base.header.announcementEnabled),
+      announcementText: asText(source.header && source.header.announcementText, base.header.announcementText, 160),
+      navLinks: normalizeNavLinks(source.header && source.header.navLinks),
+    },
+    footer: {
+      description: asText(source.footer && source.footer.description, base.footer.description, 280),
+      motto: asText(source.footer && source.footer.motto, base.footer.motto, 120),
+      socialLinks: socialLinks.length > 0 ? socialLinks : base.footer.socialLinks,
+    },
+    home: {
+      sections,
+    },
+  };
+}
+
+function themeFromLegacyLayout(legacyRaw) {
+  const legacy = safeJsonParse(legacyRaw, {});
+  const theme = getDefaultThemeV2();
+  if (!legacy || typeof legacy !== 'object') return theme;
+
+  if (legacy.header && typeof legacy.header === 'object') {
+    theme.header.announcementEnabled = asBool(legacy.header.announcementEnabled, true);
+    theme.header.announcementText = asText(legacy.header.announcementText, theme.header.announcementText, 160);
+    theme.header.navLinks = normalizeNavLinks(legacy.header.navLinks);
+  }
+
+  if (legacy.hero && typeof legacy.hero === 'object') {
+    theme.home.sections = theme.home.sections.map((section) => {
+      if (section.type !== 'hero') return section;
+      return {
+        ...section,
+        settings: {
+          ...section.settings,
+          title: asText(legacy.hero.title, section.settings.title, 120),
+          subtitle: asText(legacy.hero.subtitle, section.settings.subtitle, 240),
+          ctaText: asText(legacy.hero.ctaText, section.settings.ctaText, 40),
+          ctaLink: asText(legacy.hero.ctaLink, section.settings.ctaLink, 120),
+          backgroundImage: asText(legacy.hero.backgroundImage, section.settings.backgroundImage, 500),
+        },
+      };
+    });
+  }
+
+  if (legacy.productGrid && typeof legacy.productGrid === 'object') {
+    theme.home.sections = theme.home.sections.map((section) => {
+      if (section.type !== 'product_grid') return section;
+      return {
+        ...section,
+        settings: {
+          ...section.settings,
+          title: asText(legacy.productGrid.sectionTitle, section.settings.title, 80),
+          itemsPerPage: clampInt(legacy.productGrid.itemsPerPage, section.settings.itemsPerPage, 4, 24),
+        },
+      };
+    });
+  }
+
+  return theme;
+}
+
 // --- Middleware: Identify Shop by Domain (use only req.hostname; do not trust client headers) ---
 const identifyShop = (req, res, next) => {
   const domain = (req.hostname || '').toString();
@@ -627,7 +928,10 @@ app.get('/api/admin/live-sessions', requireAdmin('dashboard'), (req, res) => {
 // --- Shop Management API ---
 
 // 9. Get all shops with their domains
-app.get('/api/admin/shops', requireAdmin('shops'), (req, res) => {
+app.get('/api/admin/shops', requireAdmin(), (req, res) => {
+  if (!hasPanel(req.admin, 'shops') && !hasPanel(req.admin, 'design')) {
+    return res.status(403).json({ error: 'Forbidden', detail: 'insufficient_permission' });
+  }
   db.all("SELECT * FROM shops ORDER BY id ASC", (err, shops) => {
     if (err) return res.status(500).json({ error: err.message });
     db.all("SELECT * FROM shop_domains ORDER BY shop_id ASC", (err2, domains) => {
@@ -647,22 +951,43 @@ app.get('/api/admin/shops', requireAdmin('shops'), (req, res) => {
 
 // 10. Create a new shop
 app.post('/api/admin/shops', requireAdmin('shops'), (req, res) => {
-  const { name, domain, template, layout_config } = req.body;
+  const { name, domain, template, layout_config, layout_config_v2, theme_editor_v2_enabled } = req.body;
   if (!name || !domain) return res.status(400).json({ error: 'Name and domain are required' });
   const templateVal = (template && typeof template === 'string') ? template.trim() : 'beard';
   const configVal = layout_config ? (typeof layout_config === 'object' ? JSON.stringify(layout_config) : layout_config) : null;
-  
-  db.run("INSERT INTO shops (domain, name, template, layout_config) VALUES (?, ?, ?, ?)", [domain, name, templateVal, configVal], function(err) {
+  const configV2Val = layout_config_v2 != null
+    ? JSON.stringify(normalizeThemeV2(safeJsonParse(layout_config_v2, layout_config_v2)))
+    : null;
+  const enabledV2 = asBool(theme_editor_v2_enabled, false) ? 1 : 0;
+  const schemaVersion = configV2Val ? THEME_V2_SCHEMA_VERSION : 1;
+
+  db.run(
+    "INSERT INTO shops (domain, name, template, layout_config, layout_config_v2, theme_draft_v2, layout_schema_version, theme_editor_v2_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    [domain, name, templateVal, configVal, configV2Val, configV2Val, schemaVersion, enabledV2],
+    function(err) {
     if (err) return res.status(500).json({ error: err.message });
     refreshStoreHosts();
-    res.json({ success: true, shop: { id: this.lastID, domain, name, template: templateVal, layout_config: configVal } });
+    res.json({
+      success: true,
+      shop: {
+        id: this.lastID,
+        domain,
+        name,
+        template: templateVal,
+        layout_config: configVal,
+        layout_config_v2: configV2Val,
+        theme_draft_v2: configV2Val,
+        layout_schema_version: schemaVersion,
+        theme_editor_v2_enabled: enabledV2,
+      },
+    });
   });
 });
 
 // 11. Update shop (name or layout_config)
 app.put('/api/admin/shops/:id', requireAdmin('shops'), (req, res) => {
-  const { name, layout_config } = req.body;
-  if (!name && layout_config === undefined) return res.status(400).json({ error: 'Nothing to update' });
+  const { name, layout_config, theme_editor_v2_enabled } = req.body;
+  if (!name && layout_config === undefined && theme_editor_v2_enabled === undefined) return res.status(400).json({ error: 'Nothing to update' });
   
   const updates = [];
   const params = [];
@@ -675,6 +1000,11 @@ app.put('/api/admin/shops/:id', requireAdmin('shops'), (req, res) => {
   if (layout_config !== undefined) {
     updates.push('layout_config = ?');
     params.push(typeof layout_config === 'object' ? JSON.stringify(layout_config) : layout_config);
+  }
+
+  if (theme_editor_v2_enabled !== undefined) {
+    updates.push('theme_editor_v2_enabled = ?');
+    params.push(asBool(theme_editor_v2_enabled, false) ? 1 : 0);
   }
   
   params.push(req.params.id);
@@ -731,6 +1061,186 @@ app.put('/api/admin/shops/:id/ip-rules', requireAdmin('shops'), (req, res) => {
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ success: true });
+    }
+  );
+});
+
+// 15a. Get theme editor v2 payload
+app.get('/api/admin/shops/:id/theme-v2', requireAdmin('design'), (req, res) => {
+  const shopId = req.params.id;
+  db.get(
+    'SELECT id, name, layout_config, layout_config_v2, theme_draft_v2, layout_schema_version, theme_editor_v2_enabled FROM shops WHERE id = ?',
+    [shopId],
+    (err, row) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!row) return res.status(404).json({ error: 'Shop not found' });
+
+      const hasPublished = !!row.layout_config_v2;
+      const publishedRaw = safeJsonParse(row.layout_config_v2, null);
+      const legacyLayout = safeJsonParse(row.layout_config, {});
+      const published = normalizeThemeV2(hasPublished ? publishedRaw : themeFromLegacyLayout(legacyLayout));
+
+      const draftRaw = safeJsonParse(row.theme_draft_v2, null);
+      const draft = normalizeThemeV2(draftRaw || published);
+
+      res.json({
+        shopId: row.id,
+        shopName: row.name,
+        enabled: row.theme_editor_v2_enabled === 1,
+        schemaVersion: row.layout_schema_version || 1,
+        hasPublished,
+        draft,
+        published,
+      });
+    }
+  );
+});
+
+// 15b. Save theme editor v2 draft
+app.put('/api/admin/shops/:id/theme-v2/draft', requireAdmin('design'), (req, res) => {
+  const shopId = req.params.id;
+  const source = req.body && Object.prototype.hasOwnProperty.call(req.body, 'theme') ? req.body.theme : req.body;
+  const normalized = normalizeThemeV2(source);
+  const serialized = JSON.stringify(normalized);
+
+  db.run(
+    'UPDATE shops SET theme_draft_v2 = ?, layout_schema_version = ? WHERE id = ?',
+    [serialized, THEME_V2_SCHEMA_VERSION, shopId],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      if (this.changes === 0) return res.status(404).json({ error: 'Shop not found' });
+      res.json({ success: true, draft: normalized });
+    }
+  );
+});
+
+// 15c. Toggle theme editor v2 feature flag
+app.put('/api/admin/shops/:id/theme-v2/flag', requireAdmin('design'), (req, res) => {
+  const shopId = req.params.id;
+  const enabled = asBool(req.body && req.body.enabled, false) ? 1 : 0;
+
+  db.run(
+    'UPDATE shops SET theme_editor_v2_enabled = ? WHERE id = ?',
+    [enabled, shopId],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      if (this.changes === 0) return res.status(404).json({ error: 'Shop not found' });
+      res.json({ success: true, enabled: enabled === 1 });
+    }
+  );
+});
+
+// 15d. Publish current v2 theme
+app.post('/api/admin/shops/:id/theme-v2/publish', requireAdmin('design'), (req, res) => {
+  const shopId = req.params.id;
+  db.get(
+    'SELECT id, layout_config, layout_config_v2, theme_draft_v2, theme_editor_v2_enabled FROM shops WHERE id = ?',
+    [shopId],
+    (err, row) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!row) return res.status(404).json({ error: 'Shop not found' });
+
+      let source = req.body && Object.prototype.hasOwnProperty.call(req.body, 'theme') ? req.body.theme : safeJsonParse(row.theme_draft_v2, null);
+      if (!source) source = safeJsonParse(row.layout_config_v2, null);
+      if (!source) source = themeFromLegacyLayout(row.layout_config);
+
+      const normalized = normalizeThemeV2(source);
+      const serialized = JSON.stringify(normalized);
+      const enabled = req.body && Object.prototype.hasOwnProperty.call(req.body, 'enabled')
+        ? (asBool(req.body.enabled, false) ? 1 : 0)
+        : (row.theme_editor_v2_enabled === 1 ? 1 : 0);
+
+      db.get(
+        'SELECT COALESCE(MAX(version_no), 0) as maxVersion FROM shop_layout_versions WHERE shop_id = ?',
+        [shopId],
+        (err2, maxRow) => {
+          if (err2) return res.status(500).json({ error: err2.message });
+          const nextVersion = (maxRow && maxRow.maxVersion ? maxRow.maxVersion : 0) + 1;
+
+          db.run(
+            'UPDATE shops SET layout_config_v2 = ?, theme_draft_v2 = ?, layout_schema_version = ?, theme_editor_v2_enabled = ? WHERE id = ?',
+            [serialized, serialized, THEME_V2_SCHEMA_VERSION, enabled, shopId],
+            function(err3) {
+              if (err3) return res.status(500).json({ error: err3.message });
+
+              db.run(
+                'INSERT INTO shop_layout_versions (shop_id, version_no, layout_config_v2, schema_version, created_by) VALUES (?, ?, ?, ?, ?)',
+                [shopId, nextVersion, serialized, THEME_V2_SCHEMA_VERSION, req.admin.username || null],
+                (err4) => {
+                  if (err4) return res.status(500).json({ error: err4.message });
+                  res.json({
+                    success: true,
+                    enabled: enabled === 1,
+                    versionNo: nextVersion,
+                    published: normalized,
+                  });
+                }
+              );
+            }
+          );
+        }
+      );
+    }
+  );
+});
+
+// 15e. Get theme v2 publish history
+app.get('/api/admin/shops/:id/theme-v2/versions', requireAdmin('design'), (req, res) => {
+  const shopId = req.params.id;
+  db.all(
+    'SELECT id, version_no, schema_version, created_by, created_at FROM shop_layout_versions WHERE shop_id = ? ORDER BY version_no DESC LIMIT 30',
+    [shopId],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows || []);
+    }
+  );
+});
+
+// 15f. Roll back to a previous theme version
+app.post('/api/admin/shops/:id/theme-v2/rollback', requireAdmin('design'), (req, res) => {
+  const shopId = req.params.id;
+  const versionId = clampInt(req.body && req.body.versionId, 0, 0, 999999999);
+  if (!versionId) return res.status(400).json({ error: 'versionId is required' });
+
+  db.get(
+    'SELECT id, layout_config_v2, schema_version FROM shop_layout_versions WHERE id = ? AND shop_id = ?',
+    [versionId, shopId],
+    (err, row) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!row) return res.status(404).json({ error: 'Version not found' });
+
+      const normalized = normalizeThemeV2(safeJsonParse(row.layout_config_v2, {}));
+      const serialized = JSON.stringify(normalized);
+
+      db.get(
+        'SELECT COALESCE(MAX(version_no), 0) as maxVersion FROM shop_layout_versions WHERE shop_id = ?',
+        [shopId],
+        (err2, maxRow) => {
+          if (err2) return res.status(500).json({ error: err2.message });
+          const nextVersion = (maxRow && maxRow.maxVersion ? maxRow.maxVersion : 0) + 1;
+
+          db.run(
+            'UPDATE shops SET layout_config_v2 = ?, theme_draft_v2 = ?, layout_schema_version = ? WHERE id = ?',
+            [serialized, serialized, THEME_V2_SCHEMA_VERSION, shopId],
+            (err3) => {
+              if (err3) return res.status(500).json({ error: err3.message });
+              db.run(
+                'INSERT INTO shop_layout_versions (shop_id, version_no, layout_config_v2, schema_version, created_by) VALUES (?, ?, ?, ?, ?)',
+                [shopId, nextVersion, serialized, THEME_V2_SCHEMA_VERSION, req.admin.username || null],
+                (err4) => {
+                  if (err4) return res.status(500).json({ error: err4.message });
+                  res.json({
+                    success: true,
+                    versionNo: nextVersion,
+                    published: normalized,
+                  });
+                }
+              );
+            }
+          );
+        }
+      );
     }
   );
 });
@@ -879,21 +1389,25 @@ app.put('/api/admin/accounts/me', requireAdmin(), async (req, res) => {
   });
 });
 
-app.post('/api/admin/accounts', requireAdmin('accounts'), (req, res) => {
+app.post('/api/admin/accounts', requireAdmin('accounts'), async (req, res) => {
   const username = (req.body.username || '').toString().trim().slice(0, 128);
   const password = req.body.password;
   const permissions = Array.isArray(req.body.permissions) ? req.body.permissions : [];
   if (!username || username.length < 2) return res.status(400).json({ error: 'Username required' });
   if (!password || password.length < 8) return res.status(400).json({ error: 'Password min 8 chars' });
   const allowed = auth.sanitizePanels(permissions);
-  const { hash } = auth.hashPassword(password);
-  db.run('INSERT INTO admin_users (username, password_hash, role, permissions) VALUES (?, ?, ?, ?)', [username, hash, 'sub', JSON.stringify(allowed)], function (err) {
-    if (err) {
-      if (err.message.includes('UNIQUE')) return res.status(409).json({ error: 'Username taken' });
-      return res.status(500).json({ error: 'Server error' });
-    }
-    res.json({ success: true, id: this.lastID });
-  });
+  try {
+    const { hash } = await auth.hashPassword(password);
+    db.run('INSERT INTO admin_users (username, password_hash, role, permissions) VALUES (?, ?, ?, ?)', [username, hash, 'sub', JSON.stringify(allowed)], function (err) {
+      if (err) {
+        if (err.message.includes('UNIQUE')) return res.status(409).json({ error: 'Username taken' });
+        return res.status(500).json({ error: 'Server error' });
+      }
+      res.json({ success: true, id: this.lastID });
+    });
+  } catch (_) {
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 app.put('/api/admin/accounts/:id', requireAdmin('accounts'), (req, res) => {

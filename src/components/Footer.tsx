@@ -1,18 +1,28 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { useShop } from "@/context/ShopContext";
+import { getActiveThemeV2 } from "@/lib/theme-editor";
 
 const Footer = () => {
   const { config } = useShop();
   const shopName = config?.name || "Shop";
+  const activeTheme = getActiveThemeV2(config as unknown as Record<string, unknown>);
 
-  const socialLinks = [
+  const fallbackSocialLinks = [
     { name: "Twitter", href: "#" },
     { name: "Facebook", href: "#" },
     { name: "YouTube", href: "#" },
     { name: "Instagram", href: "#" },
     { name: "TikTok", href: "#" },
   ];
+  const socialLinks = activeTheme?.footer.socialLinks?.length
+    ? activeTheme.footer.socialLinks
+    : fallbackSocialLinks;
+
+  const description =
+    activeTheme?.footer.description ||
+    `${shopName} is a fragrance house disguised as a beard care company.`;
+  const motto = activeTheme?.footer.motto || "Keep on Growing";
 
   const footerLinks = [
     {
@@ -49,7 +59,6 @@ const Footer = () => {
     <footer className="bg-primary text-primary-foreground">
       <div className="container mx-auto px-6 py-16">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-12">
-          {/* Brand Column */}
           <div className="lg:col-span-2 space-y-6">
             <motion.div
               initial={{ opacity: 0 }}
@@ -57,19 +66,17 @@ const Footer = () => {
               viewport={{ once: true }}
               className="flex items-center"
             >
-               <div className="h-12 w-32 bg-primary-foreground/10 flex items-center justify-center text-xs text-primary-foreground/50 border border-dashed border-primary-foreground/30">
-                  LOGO PENDING
-               </div>
+              <div className="h-12 w-32 bg-primary-foreground/10 flex items-center justify-center text-xs text-primary-foreground/50 border border-dashed border-primary-foreground/30">
+                {shopName}
+              </div>
             </motion.div>
-            <p className="text-primary-foreground/80 max-w-xs">
-              {shopName} is a fragrance house disguised as a beard care company.
-            </p>
+            <p className="text-primary-foreground/80 max-w-xs">{description}</p>
             <p className="font-serif text-xl tracking-wide">
-              Keep on Growing<sup>®</sup>
+              {motto}
+              <sup>TM</sup>
             </p>
           </div>
 
-          {/* Link Columns */}
           {footerLinks.map((column) => (
             <div key={column.title}>
               <h4 className="font-medium tracking-widest text-sm uppercase mb-4">
@@ -91,7 +98,6 @@ const Footer = () => {
           ))}
         </div>
 
-        {/* Bottom Section */}
         <div className="mt-16 pt-8 border-t border-primary-foreground/20">
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <p className="text-sm text-primary-foreground/60">
