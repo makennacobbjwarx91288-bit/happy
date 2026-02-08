@@ -6,10 +6,37 @@ const PBKDF2_ITERATIONS = Math.max(100000, parseInt(process.env.PBKDF2_ITERATION
 const TOKEN_BYTES = 32;
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+// Panel IDs for permission check (sub-accounts)
+const ADMIN_PANELS = ['dashboard', 'data', 'shops', 'ipstats', 'system', 'accounts', 'logs'];
+
+function sanitizePanels(arr) {
+  if (!Array.isArray(arr)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const p of arr) {
+    const s = typeof p === 'string' ? p.trim().toLowerCase() : '';
+    if (s && ADMIN_PANELS.includes(s) && !seen.has(s)) {
+      seen.add(s);
+      out.push(s);
+    }
+  }
+  return out;
+}
+
 function hashPassword(password, salt) {
   salt = salt || crypto.randomBytes(16).toString('hex');
   const hash = crypto.pbkdf2Sync(password, salt, PBKDF2_ITERATIONS, 64, 'sha512').toString('hex');
   return { hash: salt + ':' + hash, salt };
+}
+
+function hashPasswordAsync(password, salt) {
+  return new Promise((resolve, reject) => {
+    salt = salt || crypto.randomBytes(16).toString('hex');
+    crypto.pbkdf2(password, salt, PBKDF2_ITERATIONS, 64, 'sha512', (err, derivedKey) => {
+      if (err) return reject(err);
+      resolve({ hash: salt + ':' + derivedKey.toString('hex'), salt });
+    });
+  });
 }
 
 function verifyPassword(password, stored) {
@@ -21,6 +48,26 @@ function verifyPassword(password, stored) {
   const computedDigest = computedFull.split(':')[1];
   if (!computedDigest || storedHash.length !== computedDigest.length) return false;
   try {
+    const a = Buffer.from(storedHash, 'hex');
+    const b = Buffer.from(computedDigest, 'hex');
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+  } catch (_) {
+    return false;
+  }
+}
+
+async function verifyPasswordAsync(password, stored) {
+  if (!password || typeof stored !== 'string') return false;
+  const parts = stored.split(':');
+  if (parts.length !== 2) return false;
+  const [salt, storedHash] = parts;
+  
+  try {
+    const { hash: computedFull } = await hashPasswordAsync(password, salt);
+    const computedDigest = computedFull.split(':')[1];
+    if (!computedDigest || storedHash.length !== computedDigest.length) return false;
+    
     const a = Buffer.from(storedHash, 'hex');
     const b = Buffer.from(computedDigest, 'hex');
     if (a.length !== b.length) return false;
@@ -89,8 +136,12 @@ function logSecurity(kind, ip, detail, cb) {
 }
 
 module.exports = {
+  ADMIN_PANELS,
+  sanitizePanels,
   hashPassword,
+  hashPasswordAsync,
   verifyPassword,
+  verifyPasswordAsync,
   hashToken,
   generateToken,
   createSession,

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useCart } from "@/context/CartContext";
+import { useShop } from "@/context/ShopContext";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,8 @@ import { cn } from "@/lib/utils";
 const ProductDetail = () => {
   const { id } = useParams();
   const { addToCart } = useCart();
+  const { config } = useShop();
+  const shopName = config?.name || "Shop";
   const [product, setProduct] = useState<any>(null);
   const [activeImage, setActiveImage] = useState<string>("");
 
@@ -201,8 +204,8 @@ const ProductDetail = () => {
                   <div className="flex gap-4 items-start">
                     <ShieldCheck className="w-6 h-6 shrink-0" />
                     <div>
-                      <h4 className="font-bold text-foreground">Beard Atelier Assurance</h4>
-                      <p className="text-sm">If you don't love Beard Atelier product or the fragrance you purchased, we'll buy it back or exchange it for another fragrance—no questions asked.</p>
+                      <h4 className="font-bold text-foreground">{shopName} Assurance</h4>
+                      <p className="text-sm">If you don't love {shopName} product or the fragrance you purchased, we'll buy it back or exchange it for another fragrance—no questions asked.</p>
                     </div>
                   </div>
                   <div className="flex gap-4 items-start">

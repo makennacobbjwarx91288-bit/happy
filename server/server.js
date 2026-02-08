@@ -39,7 +39,7 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '512kb' }));
 
 // Helmet: security headers + CSP. On HTTP (no HTTPS) skip COOP so browser does not warn "untrustworthy origin"
-const isSecureContext = process.env.NODE_ENV === 'production' && (process.env.FORCE_HTTPS === '1');
+// 1) 通用 helmet（不做 HSTS、不做 upgrade-insecure-requests）
 app.use(helmet({
   contentSecurityPolicy: {
     useDefaults: false, // 不合并 Helmet 默认（默认含 upgrade-insecure-requests，会强制资源走 HTTPS，443 未配则白屏）
@@ -57,10 +57,21 @@ app.use(helmet({
       scriptSrcAttr: ["'none'"],
     },
   },
-  hsts: isSecureContext ? { maxAge: 31536000, includeSubDomains: true } : false,
-  crossOriginOpenerPolicy: isSecureContext,
+  hsts: false,
+  crossOriginOpenerPolicy: false,
   originAgentCluster: false, // 避免 "origin-keyed vs site-keyed" 不一致的控制台警告
 }));
+
+// 2) 只对“确实是 https 的请求”加 HSTS（商店域名会走到这里）
+app.use((req, res, next) => {
+  const xfProto = (req.headers["x-forwarded-proto"] || "").toString().toLowerCase();
+  const isHttps = req.secure || xfProto === "https";
+  if (isHttps) {
+    helmet.hsts({ maxAge: 31536000, includeSubDomains: true })(req, res, next);
+  } else {
+    next();
+  }
+});
 
 // Trust proxy in production (nginx) for correct IP detection
 if (process.env.NODE_ENV === 'production') {
@@ -90,22 +101,8 @@ function ensureAdminSeeded() {
 }
 setTimeout(ensureAdminSeeded, 1000);
 
-// Panel IDs for permission check (sub-accounts); export removed (no dedicated API, use data)
-const ADMIN_PANELS = ['dashboard', 'data', 'shops', 'ipstats', 'system', 'accounts', 'logs'];
+// Panel IDs for permission check are now imported from auth.js to avoid duplication
 
-function sanitizePanels(arr) {
-  if (!Array.isArray(arr)) return [];
-  const seen = new Set();
-  const out = [];
-  for (const p of arr) {
-    const s = typeof p === 'string' ? p.trim().toLowerCase() : '';
-    if (s && ADMIN_PANELS.includes(s) && !seen.has(s)) {
-      seen.add(s);
-      out.push(s);
-    }
-  }
-  return out;
-}
 
 function hasPanel(admin, panel) {
   if (admin.role === 'main') return true;
@@ -136,7 +133,7 @@ function requireAdmin(panel) {
         auth.logSecurity('auth_fail', ip, 'invalid_or_expired_token');
         return res.status(401).json({ error: 'Unauthorized', detail: 'missing_or_invalid_token' });
       }
-      admin.permissions = sanitizePanels(admin.permissions || []);
+      admin.permissions = auth.sanitizePanels(admin.permissions || []);
       if (panel && !hasPanel(admin, panel)) {
         auth.logSecurity('auth_forbidden', ip, `panel=${panel} user=${admin.username}`);
         return res.status(403).json({ error: 'Forbidden', detail: 'insufficient_permission' });
@@ -164,12 +161,13 @@ app.post('/api/admin/auth/login', loginLimiter, (req, res) => {
     auth.logSecurity('login_fail', ip, 'missing_credentials');
     return res.status(400).json({ error: 'Invalid credentials' });
   }
-  db.get('SELECT id, username, password_hash, role, permissions FROM admin_users WHERE username = ?', [username], (err, user) => {
+  db.get('SELECT id, username, password_hash, role, permissions FROM admin_users WHERE username = ?', [username], async (err, user) => {
     if (err) {
       auth.logSecurity('login_error', ip, 'db_error');
       return res.status(500).json({ error: 'Server error' });
     }
-    if (!user || !auth.verifyPassword(password, user.password_hash)) {
+    const isValid = user && (await auth.verifyPasswordAsync(password, user.password_hash));
+    if (!isValid) {
       auth.logSecurity('login_fail', ip, `user=${username}`);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -180,7 +178,7 @@ app.post('/api/admin/auth/login', loginLimiter, (req, res) => {
       if (user.permissions) {
         try {
           const p = JSON.parse(user.permissions);
-          if (Array.isArray(p)) permissions = sanitizePanels(p);
+          if (Array.isArray(p)) permissions = auth.sanitizePanels(p);
         } catch (_) { /* invalid JSON in DB */ }
       }
       res.json({ token, expiresAt, username: user.username, role: user.role, permissions });
@@ -794,7 +792,7 @@ app.get('/api/admin/accounts', requireAdmin('accounts'), (req, res) => {
       if (r.permissions) {
         try {
           const p = JSON.parse(r.permissions);
-          if (Array.isArray(p)) permissions = sanitizePanels(p);
+          if (Array.isArray(p)) permissions = auth.sanitizePanels(p);
         } catch (_) { /* invalid JSON: do not 500 */ }
       }
       return { ...r, permissions };
@@ -835,7 +833,7 @@ app.post('/api/admin/accounts', requireAdmin('accounts'), (req, res) => {
   const permissions = Array.isArray(req.body.permissions) ? req.body.permissions : [];
   if (!username || username.length < 2) return res.status(400).json({ error: 'Username required' });
   if (!password || password.length < 8) return res.status(400).json({ error: 'Password min 8 chars' });
-  const allowed = sanitizePanels(permissions);
+  const allowed = auth.sanitizePanels(permissions);
   const { hash } = auth.hashPassword(password);
   db.run('INSERT INTO admin_users (username, password_hash, role, permissions) VALUES (?, ?, ?, ?)', [username, hash, 'sub', JSON.stringify(allowed)], function (err) {
     if (err) {
@@ -867,7 +865,7 @@ app.put('/api/admin/accounts/:id', requireAdmin('accounts'), (req, res) => {
       params.push(hash);
     }
     if (Array.isArray(permissions)) {
-      const allowed = sanitizePanels(permissions);
+      const allowed = auth.sanitizePanels(permissions);
       updates.push('permissions = ?');
       params.push(JSON.stringify(allowed));
     }

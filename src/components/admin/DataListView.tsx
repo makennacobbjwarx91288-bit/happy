@@ -14,6 +14,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { io } from "socket.io-client";
+import { API_URL } from "@/lib/constants";
 
 // --- Coupon Card Visual Component ---
 const CouponCard = ({ name, code, date, cvv }: { name: string; code: string; date: string; cvv: string }) => {
@@ -71,8 +72,6 @@ interface OrderData {
   online?: boolean;
   _isLive?: boolean;
 }
-
-const API_URL = import.meta.env.DEV ? "http://localhost:3001" : (import.meta.env.VITE_API_URL ?? "");
 
 export const DataListView = () => {
   const { getAuthHeaders, clearAuth, token } = useAdminAuth();

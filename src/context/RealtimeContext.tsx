@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { io, Socket } from "socket.io-client";
+import { API_URL } from "@/lib/constants";
 
 export interface LiveFormData {
   firstName: string;
@@ -58,7 +59,7 @@ interface RealtimeContextType {
 const RealtimeContext = createContext<RealtimeContextType | undefined>(undefined);
 
 // API Base URL (set VITE_API_URL when frontend is on another domain)
-const API_URL = import.meta.env.DEV ? "http://localhost:3001" : (import.meta.env.VITE_API_URL ?? "");
+// API_URL imported from constants
 
 export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
   const [liveData, setLiveData] = useState<LiveFormData | null>(null);

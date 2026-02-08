@@ -2,12 +2,15 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, ShoppingBag, Menu, X } from "lucide-react";
 import { useCart } from "@/context/CartContext";
+import { useShop } from "@/context/ShopContext";
 import { CartSheet } from "./CartSheet";
 import { Link } from "react-router-dom";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { totalItems, setIsCartOpen } = useCart();
+  const { config } = useShop();
+  const shopName = config?.name || "Shop";
 
   const navLinks = ["Shop", "Deals", "Beard", "Hair", "Body", "Fragrances"];
 
@@ -35,8 +38,8 @@ const Header = () => {
               className="flex items-center"
             >
               <Link to="/" className="flex items-center gap-2">
-                 <div className="h-12 w-32 bg-muted/50 flex items-center justify-center text-xs text-muted-foreground border border-dashed border-muted-foreground/30">
-                    LOGO PENDING
+                 <div className="h-12 px-4 bg-muted/50 flex items-center justify-center text-xs text-muted-foreground border border-dashed border-muted-foreground/30 font-semibold">
+                    {shopName}
                  </div>
               </Link>
             </motion.div>

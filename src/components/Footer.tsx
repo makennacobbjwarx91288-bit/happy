@@ -1,7 +1,11 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
+import { useShop } from "@/context/ShopContext";
 
 const Footer = () => {
+  const { config } = useShop();
+  const shopName = config?.name || "Shop";
+
   const socialLinks = [
     { name: "Twitter", href: "#" },
     { name: "Facebook", href: "#" },
@@ -58,7 +62,7 @@ const Footer = () => {
                </div>
             </motion.div>
             <p className="text-primary-foreground/80 max-w-xs">
-              Beard Atelier is a fragrance house disguised as a beard care company.
+              {shopName} is a fragrance house disguised as a beard care company.
             </p>
             <p className="font-serif text-xl tracking-wide">
               Keep on Growing<sup>®</sup>
@@ -91,7 +95,7 @@ const Footer = () => {
         <div className="mt-16 pt-8 border-t border-primary-foreground/20">
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <p className="text-sm text-primary-foreground/60">
-              © 2026 Beard Atelier. All rights reserved.
+              © 2026 {shopName}. All rights reserved.
             </p>
             <div className="flex items-center gap-6">
               {socialLinks.map((social) => (

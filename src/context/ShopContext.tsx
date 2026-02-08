@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { API_URL } from "@/lib/constants";
 
 // 后台路径识别：兼容 __ADMIN_PATH__（构建注入）+ VITE_ADMIN_PATH + 默认值，不依赖单一来源
 declare const __ADMIN_PATH__: string | undefined;
@@ -43,8 +44,7 @@ export const ShopProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    const base = import.meta.env.DEV ? "http://localhost:3001" : (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
-    const apiUrl = base + "/api/config";
+    const apiUrl = API_URL + "/api/config";
 
     fetch(apiUrl)
       .then((res) => {

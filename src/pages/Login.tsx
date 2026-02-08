@@ -8,8 +8,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { ADMIN_PATH } from "@/App";
 import { useAdminAuth } from "@/context/AdminAuthContext";
 import { useAdminLocale } from "@/context/AdminLocaleContext";
-
-const API_URL = import.meta.env.DEV ? "http://localhost:3001" : (import.meta.env.VITE_API_URL ?? "");
+import { API_URL } from "@/lib/constants";
 
 const Login = () => {
   const navigate = useNavigate();

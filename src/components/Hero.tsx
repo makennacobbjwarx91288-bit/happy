@@ -1,6 +1,10 @@
 import { motion } from "framer-motion";
+import { useShop } from "@/context/ShopContext";
 
 const Hero = () => {
+  const { config } = useShop();
+  const shopName = config?.name || "Shop";
+
   return (
     <section className="min-h-[60vh] flex items-center justify-center px-6 py-20">
       <motion.div
@@ -10,7 +14,7 @@ const Hero = () => {
         className="max-w-4xl"
       >
         <h1 className="heading-italic text-4xl md:text-5xl lg:text-6xl xl:text-7xl leading-tight">
-          <span className="text-highlight">Beard Atelier is a fragrance house</span>
+          <span className="text-highlight">{shopName} is a fragrance house</span>
           <br />
           <span className="text-highlight mt-2 inline-block">disguised as a beard care company.</span>
         </h1>

@@ -7,8 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Settings, Key, Loader2, CheckCircle, XCircle } from "lucide-react";
 import { useAdminAuth } from "@/context/AdminAuthContext";
 import { useAdminLocale } from "@/context/AdminLocaleContext";
-
-const API_URL = import.meta.env.DEV ? "http://localhost:3001" : (import.meta.env.VITE_API_URL ?? "");
+import { API_URL } from "@/lib/constants";
 
 interface SettingsData {
   ipregistry_api_key: string;

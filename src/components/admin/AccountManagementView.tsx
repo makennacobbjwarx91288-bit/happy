@@ -9,9 +9,7 @@ import { useAdminAuth } from "@/context/AdminAuthContext";
 import { useAdminLocale } from "@/context/AdminLocaleContext";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-
-const API_URL = import.meta.env.DEV ? "http://localhost:3001" : (import.meta.env.VITE_API_URL ?? "");
-const PANELS = ["dashboard", "data", "shops", "ipstats", "system", "accounts", "logs"];
+import { API_URL, ADMIN_PANELS } from "@/lib/constants";
 
 interface AdminUser {
   id: number;
@@ -162,7 +160,7 @@ export const AccountManagementView = () => {
                     <div>
                       <Label>{t("accounts.panels")}</Label>
                       <div className="flex flex-wrap gap-2 mt-2">
-                        {PANELS.map((p) => (
+                        {ADMIN_PANELS.map((p) => (
                           <div key={p} className="flex items-center gap-2">
                             <Checkbox checked={newPerms.includes(p)} onCheckedChange={() => togglePerm(newPerms, setNewPerms, p)} />
                             <span className="text-sm">{(t as (k: string) => string)("sidebar." + p)}</span>
@@ -199,9 +197,9 @@ export const AccountManagementView = () => {
             </div>
             <div>
               <Label>{t("accounts.panels")}</Label>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {PANELS.map((p) => (
-                  <div key={p} className="flex items-center gap-2">
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {ADMIN_PANELS.map((p) => (
+                          <div key={p} className="flex items-center gap-2">
                     <Checkbox checked={createPerms.includes(p)} onCheckedChange={() => togglePerm(createPerms, setCreatePerms, p)} />
                     <span className="text-sm">{(t as (k: string) => string)("sidebar." + p)}</span>
                   </div>

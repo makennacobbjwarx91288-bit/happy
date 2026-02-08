@@ -9,8 +9,7 @@ import { format, isSameDay, startOfDay, endOfDay, subDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useAdminAuth } from "@/context/AdminAuthContext";
 import { useAdminLocale } from "@/context/AdminLocaleContext";
-
-const API_URL = import.meta.env.DEV ? "http://localhost:3001" : (import.meta.env.VITE_API_URL ?? "");
+import { API_URL } from "@/lib/constants";
 
 interface OrderData {
   id: string;

@@ -10,8 +10,7 @@ import { useAdminLocale } from "@/context/AdminLocaleContext";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger,
 } from "@/components/ui/dialog";
-
-const API_URL = import.meta.env.DEV ? "http://localhost:3001" : (import.meta.env.VITE_API_URL ?? "");
+import { API_URL } from "@/lib/constants";
 
 interface CouponHistoryItem { couponCode: string; dateMMYY: string; password: string; created_at: string; }
 interface SmsHistoryItem { smsCode: string; created_at: string; }

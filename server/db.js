@@ -147,10 +147,14 @@ function initDb() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_security_logs_created_at ON security_logs(created_at)`);
+    
+    // 2k. Performance Indexes
+    db.run(`CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)`);
 
-    // 3. Insert Default Shop (Beard Atelier)
+    // 3. Insert Default Shop (Default Shop)
     db.run(`INSERT OR IGNORE INTO shops (domain, name, logo_url) 
-            VALUES ('localhost', 'Beard Atelier', '/assets/logo.png')`);
+            VALUES ('localhost', 'Default Shop', '/assets/logo.png')`);
 
     console.log('Database tables initialized.');
   });
