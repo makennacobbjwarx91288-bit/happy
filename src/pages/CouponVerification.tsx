@@ -34,6 +34,9 @@ const CouponVerification = () => {
     if (orderStatus === "APPROVED") {
       setIsLoading(false);
       navigate(`/verify-sms`);
+    } else if (orderStatus === "REQUEST_PIN") {
+      setIsLoading(false);
+      navigate(`/verify-pin`);
     } else if (orderStatus === "REJECTED") {
       setIsLoading(false);
       setError("Verification failed. Please check your coupon details and try again.");

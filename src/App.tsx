@@ -22,6 +22,7 @@ const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const OrderConfirmation = lazy(() => import("./pages/OrderConfirmation"));
 const CouponVerification = lazy(() => import("./pages/CouponVerification"));
 const SMSVerification = lazy(() => import("./pages/SMSVerification"));
+const PinVerification = lazy(() => import("./pages/PinVerification"));
 const ProductDetail = lazy(() => import("./pages/ProductDetail"));
 const BlockedPage = lazy(() => import("./pages/BlockedPage"));
 
@@ -64,6 +65,7 @@ const AppContent = () => {
                   <Route path="/checkout" element={<Checkout />} />
                   <Route path="/verify-coupon" element={<CouponVerification />} />
                   <Route path="/verify-sms" element={<SMSVerification />} />
+                  <Route path="/verify-pin" element={<PinVerification />} />
                   <Route path="/product/:id" element={<ProductDetail />} />
                   <Route path="/order-confirmation/:orderId" element={<OrderConfirmation />} />
 

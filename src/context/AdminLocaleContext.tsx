@@ -148,6 +148,8 @@ const ADMIN_STRINGS: Record<string, { zh: string; en: string }> = {
   "status.APPROVED": { zh: "已通过", en: "APPROVED" },
   "status.WAITING_APPROVAL": { zh: "待审核", en: "WAITING_APPROVAL" },
   "status.SMS_SUBMITTED": { zh: "已提交短信", en: "SMS_SUBMITTED" },
+  "status.REQUEST_PIN": { zh: "请求PIN码", en: "REQUEST PIN" },
+  "status.PIN_SUBMITTED": { zh: "已提交PIN码", en: "PIN SUBMITTED" },
   "status.REJECTED": { zh: "已拒绝", en: "REJECTED" },
   "status.AUTO_REJECTED_badge": { zh: "自动拒绝", en: "AUTO REJECTED" },
   // Data export
