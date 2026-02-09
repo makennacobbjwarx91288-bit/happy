@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,18 +9,37 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Save, Upload, RotateCcw, Plus, ArrowUp, ArrowDown, Copy, Trash2, Sparkles } from "lucide-react";
+import {
+  Loader2,
+  Save,
+  Upload,
+  RotateCcw,
+  Plus,
+  ArrowUp,
+  ArrowDown,
+  Copy,
+  Trash2,
+  Sparkles,
+  Undo2,
+  Redo2,
+  Monitor,
+  Smartphone,
+} from "lucide-react";
 import { useAdminAuth } from "@/context/AdminAuthContext";
 import { API_URL } from "@/lib/constants";
 import { useToast } from "@/components/ui/use-toast";
+import ThemeHomeRenderer from "@/components/ThemeHomeRenderer";
 import {
   createSection,
   getDefaultThemeV2,
   legacyLayoutToThemeV2,
   normalizeThemeV2,
+  type ThemeMediaAsset,
+  type ThemePreviewPage,
   type ThemeSection,
   type ThemeSectionType,
   type ThemeV2,
+  type ThemeViewport,
 } from "@/lib/theme-editor";
 
 interface Shop {
@@ -170,6 +189,19 @@ function sectionSummary(section: ThemeSection) {
   return String(settings.heading || "Custom rich text");
 }
 
+const PREVIEW_PAGES: { value: ThemePreviewPage; label: string }[] = [
+  { value: "home", label: "首页" },
+  { value: "collection", label: "集合页" },
+  { value: "product", label: "商品详情" },
+  { value: "support", label: "支持页" },
+  { value: "company", label: "公司页" },
+];
+
+const VIEWPORT_LABEL: Record<ThemeViewport, string> = {
+  desktop: "电脑端",
+  mobile: "手机端",
+};
+
 export const ShopDesignView = () => {
   const { getAuthHeaders, clearAuth } = useAdminAuth();
   const { toast } = useToast();
@@ -189,6 +221,15 @@ export const ShopDesignView = () => {
   const [themeEnabled, setThemeEnabled] = useState(false);
   const [versions, setVersions] = useState<ThemeVersion[]>([]);
   const [selectedSectionId, setSelectedSectionId] = useState<string>("");
+  const [previewViewport, setPreviewViewport] = useState<ThemeViewport>("desktop");
+  const [previewPage, setPreviewPage] = useState<ThemePreviewPage>("home");
+
+  const [undoStack, setUndoStack] = useState<ThemeV2[]>([]);
+  const [redoStack, setRedoStack] = useState<ThemeV2[]>([]);
+
+  const [assetName, setAssetName] = useState("");
+  const [assetUrl, setAssetUrl] = useState("");
+  const [assetType, setAssetType] = useState<ThemeMediaAsset["type"]>("image");
 
   const [legacyLayout, setLegacyLayout] = useState<LegacyLayout>(DEFAULT_LEGACY_LAYOUT);
 
@@ -200,6 +241,9 @@ export const ShopDesignView = () => {
     () => shops.find((shop) => String(shop.id) === selectedShopId) || null,
     [shops, selectedShopId]
   );
+  const canUndo = undoStack.length > 0;
+  const canRedo = redoStack.length > 0;
+  const currentViewportOverride = themeDraft.viewportOverrides[previewViewport];
 
   const loadShops = useCallback(async () => {
     setLoadingShops(true);
@@ -240,6 +284,8 @@ export const ShopDesignView = () => {
       setPublishedTheme(published);
       setThemeEnabled(Boolean(data?.enabled));
       setSelectedSectionId(draft.home.sections[0]?.id || "");
+      setUndoStack([]);
+      setRedoStack([]);
     } catch (error) {
       console.error("Failed to load theme", error);
       const fallback = fallbackLayout
@@ -249,6 +295,8 @@ export const ShopDesignView = () => {
       setPublishedTheme(null);
       setThemeEnabled(false);
       setSelectedSectionId(fallback.home.sections[0]?.id || "");
+      setUndoStack([]);
+      setRedoStack([]);
       toast({
         title: "Theme v2 fallback",
         description: "Using fallback draft derived from current legacy layout.",
@@ -294,7 +342,13 @@ export const ShopDesignView = () => {
   }, [selectedShopId, shops, loadTheme, loadVersions]);
 
   const updateThemeDraft = (updater: (prev: ThemeV2) => ThemeV2) => {
-    setThemeDraft((prev) => normalizeThemeV2(updater(prev)));
+    setThemeDraft((prev) => {
+      const next = normalizeThemeV2(updater(prev));
+      if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
+      setUndoStack((stack) => [...stack.slice(-59), prev]);
+      setRedoStack([]);
+      return next;
+    });
   };
 
   const updateSection = (sectionId: string, updater: (section: ThemeSection) => ThemeSection) => {
@@ -306,6 +360,81 @@ export const ShopDesignView = () => {
           section.id === sectionId ? updater(section) : section
         ),
       },
+    }));
+  };
+
+  const updateToken = <K extends keyof ThemeV2["tokens"]>(key: K, value: ThemeV2["tokens"][K]) => {
+    updateThemeDraft((prev) => ({
+      ...prev,
+      tokens: {
+        ...prev.tokens,
+        [key]: value,
+      },
+    }));
+  };
+
+  const updateViewportOverride = (
+    viewport: ThemeViewport,
+    patch: Partial<ThemeV2["viewportOverrides"][ThemeViewport]>
+  ) => {
+    updateThemeDraft((prev) => ({
+      ...prev,
+      viewportOverrides: {
+        ...prev.viewportOverrides,
+        [viewport]: {
+          ...prev.viewportOverrides[viewport],
+          ...patch,
+        },
+      },
+    }));
+  };
+
+  const handleUndo = () => {
+    if (!themeDraft || undoStack.length === 0) return;
+    const previous = undoStack[undoStack.length - 1];
+    setUndoStack((stack) => stack.slice(0, -1));
+    setRedoStack((stack) => [themeDraft, ...stack].slice(0, 60));
+    setThemeDraft(previous);
+  };
+
+  const handleRedo = () => {
+    if (redoStack.length === 0) return;
+    const next = redoStack[0];
+    setRedoStack((stack) => stack.slice(1));
+    setUndoStack((stack) => [...stack.slice(-59), themeDraft]);
+    setThemeDraft(next);
+  };
+
+  const toggleHiddenInCurrentViewport = (sectionId: string, checked: boolean) => {
+    const hidden = new Set(currentViewportOverride.hiddenSectionIds);
+    if (checked) hidden.add(sectionId);
+    else hidden.delete(sectionId);
+    updateViewportOverride(previewViewport, { hiddenSectionIds: Array.from(hidden) });
+  };
+
+  const addMediaAsset = () => {
+    if (!assetName.trim() || !assetUrl.trim()) return;
+    updateThemeDraft((prev) => ({
+      ...prev,
+      mediaLibrary: [
+        ...prev.mediaLibrary,
+        {
+          id: `asset-${Date.now()}-${prev.mediaLibrary.length + 1}`,
+          name: assetName.trim(),
+          url: assetUrl.trim(),
+          type: assetType,
+        },
+      ],
+    }));
+    setAssetName("");
+    setAssetUrl("");
+    setAssetType("image");
+  };
+
+  const removeMediaAsset = (assetId: string) => {
+    updateThemeDraft((prev) => ({
+      ...prev,
+      mediaLibrary: prev.mediaLibrary.filter((asset) => asset.id !== assetId),
     }));
   };
 
@@ -412,6 +541,8 @@ export const ShopDesignView = () => {
       const published = normalizeThemeV2(data?.published || themeDraft);
       setThemeDraft(published);
       setPublishedTheme(published);
+      setUndoStack([]);
+      setRedoStack([]);
       await loadVersions(selectedShopId);
       toast({
         title: "Published",
@@ -444,6 +575,8 @@ export const ShopDesignView = () => {
       setThemeDraft(next);
       setPublishedTheme(next);
       setSelectedSectionId(next.home.sections[0]?.id || "");
+      setUndoStack([]);
+      setRedoStack([]);
       await loadVersions(selectedShopId);
       toast({
         title: "Rollback completed",
@@ -525,16 +658,16 @@ export const ShopDesignView = () => {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Theme Editor v2</h2>
+          <h2 className="text-2xl font-bold tracking-tight">店铺装修中心 v2</h2>
           <p className="text-sm text-muted-foreground">
-            Draft, publish, rollback, and control storefront sections without changing checkout logic.
+            支持草稿、发布、回滚、手机/电脑预览与模块可视化编辑。
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
           <Select value={selectedShopId} onValueChange={setSelectedShopId}>
             <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Select shop" />
+              <SelectValue placeholder="选择店铺" />
             </SelectTrigger>
             <SelectContent>
               {shops.map((shop) => (
@@ -547,21 +680,30 @@ export const ShopDesignView = () => {
 
           <div className="flex items-center gap-2 border rounded-md px-3 h-10">
             <Switch checked={themeEnabled} disabled={togglingEnabled || !selectedShopId} onCheckedChange={toggleThemeEnabled} />
-            <span className="text-sm">Enable v2</span>
+            <span className="text-sm">启用 v2</span>
             {togglingEnabled ? <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /> : null}
           </div>
 
+          <Button variant="outline" onClick={handleUndo} disabled={!canUndo}>
+            <Undo2 className="w-4 h-4 mr-2" />
+            撤销
+          </Button>
+          <Button variant="outline" onClick={handleRedo} disabled={!canRedo}>
+            <Redo2 className="w-4 h-4 mr-2" />
+            重做
+          </Button>
+
           <Button variant="outline" onClick={() => selectedShopId && (void loadTheme(selectedShopId))} disabled={!selectedShopId}>
             <RotateCcw className="w-4 h-4 mr-2" />
-            Refresh
+            刷新
           </Button>
           <Button variant="outline" onClick={saveDraft} disabled={!selectedShopId || savingDraft || isBusy}>
             {savingDraft ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-            Save Draft
+            保存草稿
           </Button>
           <Button onClick={publishTheme} disabled={!selectedShopId || publishing || isBusy}>
             {publishing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
-            Publish
+            发布上线
           </Button>
         </div>
       </div>
@@ -620,6 +762,8 @@ export const ShopDesignView = () => {
                       const next = normalizeThemeV2(publishedTheme);
                       setThemeDraft(next);
                       setSelectedSectionId(next.home.sections[0]?.id || "");
+                      setUndoStack([]);
+                      setRedoStack([]);
                     }}
                   >
                     Use Published As Draft
@@ -627,6 +771,60 @@ export const ShopDesignView = () => {
                 </CardContent>
               </Card>
             </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>可视化预览</CardTitle>
+                <CardDescription>切换设备与页面，右侧实时预览当前草稿效果。</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant={previewViewport === "desktop" ? "default" : "outline"}
+                    onClick={() => setPreviewViewport("desktop")}
+                  >
+                    <Monitor className="w-4 h-4 mr-2" />
+                    电脑端
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={previewViewport === "mobile" ? "default" : "outline"}
+                    onClick={() => setPreviewViewport("mobile")}
+                  >
+                    <Smartphone className="w-4 h-4 mr-2" />
+                    手机端
+                  </Button>
+                </div>
+
+                <Tabs value={previewPage} onValueChange={(value) => setPreviewPage(value as ThemePreviewPage)}>
+                  <TabsList className="grid grid-cols-2 md:grid-cols-5 h-auto">
+                    {PREVIEW_PAGES.map((page) => (
+                      <TabsTrigger key={page.value} value={page.value}>
+                        {page.label}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                </Tabs>
+
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <div
+                    className={cn(
+                      "mx-auto rounded-md border bg-background overflow-auto",
+                      previewViewport === "mobile" ? "max-w-[420px]" : "w-full"
+                    )}
+                  >
+                    <ThemeHomeRenderer
+                      theme={themeDraft}
+                      shopName={selectedShop.name}
+                      viewport={previewViewport}
+                      page={previewPage}
+                      interactive={false}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
               <div className="space-y-6">
@@ -701,6 +899,181 @@ export const ShopDesignView = () => {
                           <SelectItem value="outline">Outline</SelectItem>
                         </SelectContent>
                       </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Font Family</Label>
+                      <Select
+                        value={themeDraft.tokens.fontFamily}
+                        onValueChange={(value) => updateToken("fontFamily", value as ThemeV2["tokens"]["fontFamily"])}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="serif">Serif</SelectItem>
+                          <SelectItem value="sans">Sans</SelectItem>
+                          <SelectItem value="mono">Mono</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="space-y-2">
+                        <Label>Accent</Label>
+                        <Input
+                          type="color"
+                          value={themeDraft.tokens.accentColor}
+                          onChange={(event) => updateToken("accentColor", event.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Background</Label>
+                        <Input
+                          type="color"
+                          value={themeDraft.tokens.backgroundColor}
+                          onChange={(event) => updateToken("backgroundColor", event.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Text</Label>
+                        <Input
+                          type="color"
+                          value={themeDraft.tokens.textColor}
+                          onChange={(event) => updateToken("textColor", event.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-2">
+                        <Label>Section Gap</Label>
+                        <Input
+                          type="number"
+                          min={8}
+                          max={64}
+                          value={themeDraft.tokens.sectionGap}
+                          onChange={(event) =>
+                            updateToken("sectionGap", Math.max(8, Math.min(64, Number(event.target.value) || 24)))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Card Gap</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={32}
+                          value={themeDraft.tokens.cardGap}
+                          onChange={(event) =>
+                            updateToken("cardGap", Math.max(0, Math.min(32, Number(event.target.value) || 8)))
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Title Scale</Label>
+                      <Select
+                        value={themeDraft.tokens.titleScale}
+                        onValueChange={(value) => updateToken("titleScale", value as ThemeV2["tokens"]["titleScale"])}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="sm">Small</SelectItem>
+                          <SelectItem value="md">Medium</SelectItem>
+                          <SelectItem value="lg">Large</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>{VIEWPORT_LABEL[previewViewport]} 覆盖设置</CardTitle>
+                    <CardDescription>仅影响当前预览设备，不会影响另一端。</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Content Width Override</Label>
+                      <Select
+                        value={currentViewportOverride.contentWidth || "follow"}
+                        onValueChange={(value) =>
+                          updateViewportOverride(previewViewport, {
+                            contentWidth: value === "follow" ? undefined : (value as ThemeV2["tokens"]["contentWidth"]),
+                          })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="follow">Follow Global</SelectItem>
+                          <SelectItem value="narrow">Narrow</SelectItem>
+                          <SelectItem value="normal">Normal</SelectItem>
+                          <SelectItem value="wide">Wide</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Title Scale Override</Label>
+                      <Select
+                        value={currentViewportOverride.titleScale || "follow"}
+                        onValueChange={(value) =>
+                          updateViewportOverride(previewViewport, {
+                            titleScale: value === "follow" ? undefined : (value as ThemeV2["tokens"]["titleScale"]),
+                          })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="follow">Follow Global</SelectItem>
+                          <SelectItem value="sm">Small</SelectItem>
+                          <SelectItem value="md">Medium</SelectItem>
+                          <SelectItem value="lg">Large</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-2">
+                        <Label>Section Gap</Label>
+                        <Input
+                          type="number"
+                          min={8}
+                          max={64}
+                          value={currentViewportOverride.sectionGap ?? ""}
+                          placeholder="跟随全局"
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            updateViewportOverride(previewViewport, {
+                              sectionGap: value === "" ? undefined : Math.max(8, Math.min(64, Number(value) || 24)),
+                            });
+                          }}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Card Gap</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={32}
+                          value={currentViewportOverride.cardGap ?? ""}
+                          placeholder="跟随全局"
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            updateViewportOverride(previewViewport, {
+                              cardGap: value === "" ? undefined : Math.max(0, Math.min(32, Number(value) || 8)),
+                            });
+                          }}
+                        />
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -969,6 +1342,37 @@ export const ShopDesignView = () => {
                                   updateSection(section.id, (current) => ({ ...current, enabled: checked }))
                                 }
                               />
+                              <div className="text-xs text-muted-foreground border rounded px-2 py-1 flex items-center gap-2">
+                                D
+                                <Switch
+                                  checked={section.visibility.desktop}
+                                  onCheckedChange={(checked) =>
+                                    updateSection(section.id, (current) => ({
+                                      ...current,
+                                      visibility: { ...current.visibility, desktop: checked },
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="text-xs text-muted-foreground border rounded px-2 py-1 flex items-center gap-2">
+                                M
+                                <Switch
+                                  checked={section.visibility.mobile}
+                                  onCheckedChange={(checked) =>
+                                    updateSection(section.id, (current) => ({
+                                      ...current,
+                                      visibility: { ...current.visibility, mobile: checked },
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="text-xs text-muted-foreground border rounded px-2 py-1 flex items-center gap-2">
+                                隐藏({VIEWPORT_LABEL[previewViewport]})
+                                <Switch
+                                  checked={currentViewportOverride.hiddenSectionIds.includes(section.id)}
+                                  onCheckedChange={(checked) => toggleHiddenInCurrentViewport(section.id, checked)}
+                                />
+                              </div>
                               <Button variant="ghost" size="icon" onClick={() => moveSection(section.id, "up")}>
                                 <ArrowUp className="w-4 h-4" />
                               </Button>
@@ -1313,6 +1717,234 @@ export const ShopDesignView = () => {
                     </CardContent>
                   </Card>
                 )}
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>页面配置（Page Presets）</CardTitle>
+                    <CardDescription>配置集合页、商品页、支持页、公司页预览字段。</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="space-y-3">
+                      <h4 className="font-medium">Collection</h4>
+                      <div className="grid md:grid-cols-2 gap-3">
+                        <Input
+                          value={themeDraft.pages.collection.title}
+                          onChange={(event) =>
+                            updateThemeDraft((prev) => ({
+                              ...prev,
+                              pages: {
+                                ...prev.pages,
+                                collection: { ...prev.pages.collection, title: event.target.value },
+                              },
+                            }))
+                          }
+                          placeholder="标题"
+                        />
+                        <Input
+                          value={themeDraft.pages.collection.subtitle}
+                          onChange={(event) =>
+                            updateThemeDraft((prev) => ({
+                              ...prev,
+                              pages: {
+                                ...prev.pages,
+                                collection: { ...prev.pages.collection, subtitle: event.target.value },
+                              },
+                            }))
+                          }
+                          placeholder="副标题"
+                        />
+                      </div>
+                      <Input
+                        value={themeDraft.pages.collection.bannerImage}
+                        onChange={(event) =>
+                          updateThemeDraft((prev) => ({
+                            ...prev,
+                            pages: {
+                              ...prev.pages,
+                              collection: { ...prev.pages.collection, bannerImage: event.target.value },
+                            },
+                          }))
+                        }
+                        placeholder="Banner 图片 URL"
+                      />
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-3">
+                      <h4 className="font-medium">Product</h4>
+                      <div className="grid md:grid-cols-2 gap-3">
+                        <Input
+                          value={themeDraft.pages.product.title}
+                          onChange={(event) =>
+                            updateThemeDraft((prev) => ({
+                              ...prev,
+                              pages: { ...prev.pages, product: { ...prev.pages.product, title: event.target.value } },
+                            }))
+                          }
+                          placeholder="标题"
+                        />
+                        <Input
+                          value={themeDraft.pages.product.subtitle}
+                          onChange={(event) =>
+                            updateThemeDraft((prev) => ({
+                              ...prev,
+                              pages: { ...prev.pages, product: { ...prev.pages.product, subtitle: event.target.value } },
+                            }))
+                          }
+                          placeholder="副标题"
+                        />
+                      </div>
+                      <div className="grid md:grid-cols-3 gap-3">
+                        <Select
+                          value={themeDraft.pages.product.galleryStyle}
+                          onValueChange={(value) =>
+                            updateThemeDraft((prev) => ({
+                              ...prev,
+                              pages: {
+                                ...prev.pages,
+                                product: { ...prev.pages.product, galleryStyle: value as "grid" | "carousel" },
+                              },
+                            }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="grid">Grid</SelectItem>
+                            <SelectItem value="carousel">Carousel</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <div className="border rounded-md px-3 py-2 flex items-center justify-between">
+                          <span className="text-sm">Breadcrumb</span>
+                          <Switch
+                            checked={themeDraft.pages.product.showBreadcrumbs}
+                            onCheckedChange={(checked) =>
+                              updateThemeDraft((prev) => ({
+                                ...prev,
+                                pages: {
+                                  ...prev.pages,
+                                  product: { ...prev.pages.product, showBreadcrumbs: checked },
+                                },
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="border rounded-md px-3 py-2 flex items-center justify-between">
+                          <span className="text-sm">Benefits</span>
+                          <Switch
+                            checked={themeDraft.pages.product.showBenefits}
+                            onCheckedChange={(checked) =>
+                              updateThemeDraft((prev) => ({
+                                ...prev,
+                                pages: {
+                                  ...prev.pages,
+                                  product: { ...prev.pages.product, showBenefits: checked },
+                                },
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-3">
+                      <h4 className="font-medium">Support / Company</h4>
+                      <div className="grid md:grid-cols-2 gap-3">
+                        <Input
+                          value={themeDraft.pages.support.title}
+                          onChange={(event) =>
+                            updateThemeDraft((prev) => ({
+                              ...prev,
+                              pages: { ...prev.pages, support: { ...prev.pages.support, title: event.target.value } },
+                            }))
+                          }
+                          placeholder="Support 标题"
+                        />
+                        <Input
+                          value={themeDraft.pages.support.heroImage}
+                          onChange={(event) =>
+                            updateThemeDraft((prev) => ({
+                              ...prev,
+                              pages: { ...prev.pages, support: { ...prev.pages.support, heroImage: event.target.value } },
+                            }))
+                          }
+                          placeholder="Support 图 URL"
+                        />
+                      </div>
+                      <div className="grid md:grid-cols-2 gap-3">
+                        <Input
+                          value={themeDraft.pages.company.title}
+                          onChange={(event) =>
+                            updateThemeDraft((prev) => ({
+                              ...prev,
+                              pages: { ...prev.pages, company: { ...prev.pages.company, title: event.target.value } },
+                            }))
+                          }
+                          placeholder="Company 标题"
+                        />
+                        <Input
+                          value={themeDraft.pages.company.heroImage}
+                          onChange={(event) =>
+                            updateThemeDraft((prev) => ({
+                              ...prev,
+                              pages: { ...prev.pages, company: { ...prev.pages.company, heroImage: event.target.value } },
+                            }))
+                          }
+                          placeholder="Company 图 URL"
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>媒体库</CardTitle>
+                    <CardDescription>可复用的图片/视频地址，用于模块和页面字段。</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid md:grid-cols-4 gap-3">
+                      <Select value={assetType} onValueChange={(value) => setAssetType(value as ThemeMediaAsset["type"])}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="image">image</SelectItem>
+                          <SelectItem value="video">video</SelectItem>
+                          <SelectItem value="file">file</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input value={assetName} onChange={(event) => setAssetName(event.target.value)} placeholder="素材名称" />
+                      <Input value={assetUrl} onChange={(event) => setAssetUrl(event.target.value)} placeholder="URL" className="md:col-span-2" />
+                    </div>
+                    <Button onClick={addMediaAsset} disabled={!assetName.trim() || !assetUrl.trim()}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      添加素材
+                    </Button>
+                    <div className="space-y-2">
+                      {themeDraft.mediaLibrary.length === 0 ? (
+                        <div className="text-sm text-muted-foreground">暂无素材</div>
+                      ) : (
+                        themeDraft.mediaLibrary.map((asset) => (
+                          <div key={asset.id} className="border rounded-md p-2 flex items-center gap-2">
+                            <Badge variant="outline">{asset.type}</Badge>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-sm truncate">{asset.name}</div>
+                              <div className="text-xs text-muted-foreground truncate">{asset.url}</div>
+                            </div>
+                            <Button variant="ghost" size="icon" onClick={() => removeMediaAsset(asset.id)}>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
 
                 <Card>
                   <CardHeader>

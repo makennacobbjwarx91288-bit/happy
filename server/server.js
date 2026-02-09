@@ -295,7 +295,7 @@ function setSetting(key, value, cb) {
   );
 }
 
-const THEME_V2_SCHEMA_VERSION = 2;
+const THEME_V2_SCHEMA_VERSION = 3;
 const DEFAULT_NAV_LINKS = [
   { label: 'Shop', href: '/shop' },
   { label: 'Deals', href: '/deals' },
@@ -303,6 +303,10 @@ const DEFAULT_NAV_LINKS = [
   { label: 'Hair', href: '/hair' },
   { label: 'Body', href: '/body' },
   { label: 'Fragrances', href: '/fragrances' },
+];
+const DEFAULT_SOCIAL_LINKS = [
+  { name: 'Instagram', href: '#' },
+  { name: 'YouTube', href: '#' },
 ];
 
 function safeJsonParse(raw, fallback) {
@@ -314,6 +318,10 @@ function safeJsonParse(raw, fallback) {
   } catch (_) {
     return fallback;
   }
+}
+
+function isObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 function asText(value, fallback = '', maxLen = 200) {
@@ -336,6 +344,15 @@ function clampInt(value, fallback, min, max) {
   return Math.max(min, Math.min(max, Math.round(n)));
 }
 
+function asColor(value, fallback) {
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim();
+  if (!trimmed) return fallback;
+  if (/^#[0-9a-fA-F]{3,8}$/.test(trimmed)) return trimmed;
+  if (/^(rgb|rgba|hsl|hsla)\(/.test(trimmed)) return trimmed.slice(0, 40);
+  return fallback;
+}
+
 function normalizeNavLinks(raw) {
   const fromInput = Array.isArray(raw) ? raw : [];
   const links = [];
@@ -354,91 +371,67 @@ function normalizeNavLinks(raw) {
   return links.length > 0 ? links : DEFAULT_NAV_LINKS.map((link) => ({ ...link }));
 }
 
-function getDefaultThemeV2() {
+function normalizeSocialLinks(raw) {
+  const fromInput = Array.isArray(raw) ? raw : [];
+  const links = [];
+  for (const item of fromInput) {
+    if (!item || typeof item !== 'object') continue;
+    const name = asText(item.name, '', 30);
+    const href = asText(item.href, '', 120);
+    if (!name || !href) continue;
+    links.push({ name, href });
+    if (links.length >= 10) break;
+  }
+  return links.length > 0 ? links : DEFAULT_SOCIAL_LINKS.map((link) => ({ ...link }));
+}
+
+function normalizeVisibility(raw) {
+  if (!isObject(raw)) {
+    return { desktop: true, mobile: true };
+  }
   return {
-    schema_version: THEME_V2_SCHEMA_VERSION,
-    tokens: {
-      contentWidth: 'normal',
-      radius: 'none',
-      surface: 'default',
-    },
-    header: {
-      announcementEnabled: true,
-      announcementText: 'Norse Winter Beard Oil Available Now',
-      navLinks: DEFAULT_NAV_LINKS,
-    },
-    footer: {
-      description: 'Premium grooming essentials for modern routines.',
-      motto: 'Keep on Growing',
-      socialLinks: [
-        { name: 'Instagram', href: '#' },
-        { name: 'YouTube', href: '#' },
-      ],
-    },
-    home: {
-      sections: [
-        {
-          id: 'hero-1',
-          type: 'hero',
-          enabled: true,
-          settings: {
-            title: 'Keep on Growing',
-            subtitle: 'Premium beard care made for everyday confidence.',
-            ctaText: 'Shop Now',
-            ctaLink: '/shop',
-            backgroundImage: '',
-          },
-        },
-        {
-          id: 'product-grid-1',
-          type: 'product_grid',
-          enabled: true,
-          settings: {
-            title: 'The Collection',
-            itemsPerPage: 8,
-            showFilters: true,
-          },
-        },
-        {
-          id: 'tagline-1',
-          type: 'tagline',
-          enabled: true,
-          settings: {
-            text: 'KEEP ON GROWING',
-          },
-        },
-        {
-          id: 'brand-story-1',
-          type: 'brand_story',
-          enabled: true,
-          settings: {
-            kicker: 'Our Story',
-            title: 'Crafted for the Modern Gentleman',
-            body:
-              'We build reliable, premium grooming products that fit real routines. Every release is focused on comfort, confidence, and daily consistency.',
-            buttonText: 'Learn More',
-            buttonLink: '/about',
-          },
-        },
-      ],
-    },
+    desktop: asBool(raw.desktop, true),
+    mobile: asBool(raw.mobile, true),
   };
 }
 
+function normalizeMediaLibrary(raw) {
+  const source = Array.isArray(raw) ? raw : [];
+  const out = [];
+  const seen = new Set();
+  for (const item of source) {
+    if (!isObject(item)) continue;
+    const id = asText(item.id, `asset-${Date.now()}-${out.length + 1}`, 120).replace(/[^\w-]/g, '-');
+    const name = asText(item.name, '', 60);
+    const url = asText(item.url, '', 600);
+    const typeRaw = asText(item.type, 'image', 10).toLowerCase();
+    const type = typeRaw === 'video' || typeRaw === 'file' ? typeRaw : 'image';
+    if (!name || !url) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, name, url, type });
+    if (out.length >= 80) break;
+  }
+  return out;
+}
+
 function normalizeSection(section, index) {
-  const typeRaw = asText(section && section.type, '', 30).toLowerCase();
+  const source = isObject(section) ? section : {};
+  const typeRaw = asText(source.type, 'rich_text', 30).toLowerCase();
   const type = ['hero', 'product_grid', 'tagline', 'brand_story', 'rich_text'].includes(typeRaw)
     ? typeRaw
     : 'rich_text';
-  const id = asText(section && section.id, `${type}-${index + 1}`, 80).replace(/[^\w-]/g, '-');
-  const enabled = asBool(section && section.enabled, true);
-  const input = section && section.settings && typeof section.settings === 'object' ? section.settings : {};
+  const id = asText(source.id, `${type}-${index + 1}`, 80).replace(/[^\w-]/g, '-');
+  const enabled = asBool(source.enabled, true);
+  const visibility = normalizeVisibility(source.visibility);
+  const input = isObject(source.settings) ? source.settings : {};
 
   if (type === 'hero') {
     return {
       id,
       type,
       enabled,
+      visibility,
       settings: {
         title: asText(input.title, 'Keep on Growing', 120),
         subtitle: asText(input.subtitle, 'Premium beard care made for everyday confidence.', 240),
@@ -454,6 +447,7 @@ function normalizeSection(section, index) {
       id,
       type,
       enabled,
+      visibility,
       settings: {
         title: asText(input.title, 'The Collection', 80),
         itemsPerPage: clampInt(input.itemsPerPage, 8, 4, 24),
@@ -467,6 +461,7 @@ function normalizeSection(section, index) {
       id,
       type,
       enabled,
+      visibility,
       settings: {
         text: asText(input.text, 'KEEP ON GROWING', 120),
       },
@@ -478,10 +473,11 @@ function normalizeSection(section, index) {
       id,
       type,
       enabled,
+      visibility,
       settings: {
         kicker: asText(input.kicker, 'Our Story', 40),
         title: asText(input.title, 'Crafted for the Modern Gentleman', 120),
-        body: asText(input.body, 'We build products that make daily routines simpler and better.', 900),
+        body: asText(input.body, 'We build products that make daily routines simpler and better.', 1000),
         buttonText: asText(input.buttonText, 'Learn More', 40),
         buttonLink: asText(input.buttonLink, '/about', 120),
       },
@@ -492,21 +488,154 @@ function normalizeSection(section, index) {
     id,
     type: 'rich_text',
     enabled,
+    visibility,
     settings: {
       heading: asText(input.heading, 'Custom Section', 80),
-      body: asText(input.body, 'Use this block for promos, notices, or campaign copy.', 1200),
+      body: asText(input.body, 'Use this block for promos, notices, or campaign copy.', 1400),
       align: ['left', 'center', 'right'].includes(asText(input.align, 'left', 10)) ? asText(input.align, 'left', 10) : 'left',
+    },
+  };
+}
+
+function normalizeViewportOverride(raw, sectionIds, fallback) {
+  const source = isObject(raw) ? raw : {};
+  const contentWidthRaw = asText(source.contentWidth, '', 12);
+  const contentWidth = ['narrow', 'normal', 'wide'].includes(contentWidthRaw) ? contentWidthRaw : fallback.contentWidth;
+  const titleScaleRaw = asText(source.titleScale, '', 12);
+  const titleScale = ['sm', 'md', 'lg'].includes(titleScaleRaw) ? titleScaleRaw : fallback.titleScale;
+
+  const hiddenInput = Array.isArray(source.hiddenSectionIds) ? source.hiddenSectionIds : fallback.hiddenSectionIds;
+  const hiddenSectionIds = hiddenInput
+    .map((id) => asText(id, '', 80).replace(/[^\w-]/g, '-'))
+    .filter((id, idx, list) => id && sectionIds.includes(id) && list.indexOf(id) === idx)
+    .slice(0, 30);
+
+  return {
+    contentWidth,
+    sectionGap: source.sectionGap == null ? fallback.sectionGap : clampInt(source.sectionGap, fallback.sectionGap || 24, 8, 64),
+    cardGap: source.cardGap == null ? fallback.cardGap : clampInt(source.cardGap, fallback.cardGap || 8, 0, 32),
+    titleScale,
+    hiddenSectionIds,
+  };
+}
+
+function normalizePages(raw, fallback) {
+  const source = isObject(raw) ? raw : {};
+  const collection = isObject(source.collection) ? source.collection : {};
+  const product = isObject(source.product) ? source.product : {};
+  const support = isObject(source.support) ? source.support : {};
+  const company = isObject(source.company) ? source.company : {};
+  return {
+    collection: {
+      title: asText(collection.title, fallback.collection.title, 120),
+      subtitle: asText(collection.subtitle, fallback.collection.subtitle, 280),
+      bannerImage: asText(collection.bannerImage, fallback.collection.bannerImage, 500),
+    },
+    product: {
+      title: asText(product.title, fallback.product.title, 120),
+      subtitle: asText(product.subtitle, fallback.product.subtitle, 280),
+      galleryStyle: ['grid', 'carousel'].includes(asText(product.galleryStyle, fallback.product.galleryStyle, 20))
+        ? asText(product.galleryStyle, fallback.product.galleryStyle, 20)
+        : fallback.product.galleryStyle,
+      showBreadcrumbs: asBool(product.showBreadcrumbs, fallback.product.showBreadcrumbs),
+      showBenefits: asBool(product.showBenefits, fallback.product.showBenefits),
+    },
+    support: {
+      title: asText(support.title, fallback.support.title, 120),
+      subtitle: asText(support.subtitle, fallback.support.subtitle, 280),
+      heroImage: asText(support.heroImage, fallback.support.heroImage, 500),
+    },
+    company: {
+      title: asText(company.title, fallback.company.title, 120),
+      subtitle: asText(company.subtitle, fallback.company.subtitle, 280),
+      heroImage: asText(company.heroImage, fallback.company.heroImage, 500),
+    },
+  };
+}
+
+function getDefaultThemeV2() {
+  return {
+    schema_version: THEME_V2_SCHEMA_VERSION,
+    tokens: {
+      contentWidth: 'normal',
+      radius: 'none',
+      surface: 'default',
+      fontFamily: 'serif',
+      accentColor: '#d4af37',
+      backgroundColor: '#ffffff',
+      textColor: '#1f1f1f',
+      sectionGap: 24,
+      cardGap: 8,
+      titleScale: 'md',
+    },
+    viewportOverrides: {
+      desktop: {
+        hiddenSectionIds: [],
+      },
+      mobile: {
+        contentWidth: 'narrow',
+        sectionGap: 20,
+        cardGap: 8,
+        titleScale: 'sm',
+        hiddenSectionIds: [],
+      },
+    },
+    header: {
+      announcementEnabled: true,
+      announcementText: 'Norse Winter Beard Oil Available Now',
+      navLinks: DEFAULT_NAV_LINKS.map((link) => ({ ...link })),
+    },
+    footer: {
+      description: 'Premium grooming essentials for modern routines.',
+      motto: 'Keep on Growing',
+      socialLinks: DEFAULT_SOCIAL_LINKS.map((link) => ({ ...link })),
+    },
+    mediaLibrary: [],
+    pages: {
+      collection: {
+        title: 'Shop Collection',
+        subtitle: 'Curated formulas for beard, hair, and body.',
+        bannerImage: '',
+      },
+      product: {
+        title: 'Product Details',
+        subtitle: 'Clear ingredient info and routine guidance.',
+        galleryStyle: 'grid',
+        showBreadcrumbs: true,
+        showBenefits: true,
+      },
+      support: {
+        title: 'Support Center',
+        subtitle: 'Shipping, returns, and order support in one place.',
+        heroImage: '',
+      },
+      company: {
+        title: 'About Our Brand',
+        subtitle: 'What we build and why it helps daily routines.',
+        heroImage: '',
+      },
+    },
+    home: {
+      sections: [
+        normalizeSection({ id: 'hero-1', type: 'hero', enabled: true, visibility: { desktop: true, mobile: true }, settings: {} }, 0),
+        normalizeSection({ id: 'product-grid-1', type: 'product_grid', enabled: true, visibility: { desktop: true, mobile: true }, settings: {} }, 1),
+        normalizeSection({ id: 'tagline-1', type: 'tagline', enabled: true, visibility: { desktop: true, mobile: true }, settings: {} }, 2),
+        normalizeSection({ id: 'brand-story-1', type: 'brand_story', enabled: true, visibility: { desktop: true, mobile: true }, settings: {} }, 3),
+      ],
     },
   };
 }
 
 function normalizeThemeV2(input) {
   const base = getDefaultThemeV2();
-  const source = input && typeof input === 'object' ? input : {};
+  const source = isObject(input) ? input : {};
+  const tokensSource = isObject(source.tokens) ? source.tokens : {};
 
-  const tokenWidth = asText(source.tokens && source.tokens.contentWidth, base.tokens.contentWidth, 20);
-  const tokenRadius = asText(source.tokens && source.tokens.radius, base.tokens.radius, 20);
-  const tokenSurface = asText(source.tokens && source.tokens.surface, base.tokens.surface, 20);
+  const tokenWidth = asText(tokensSource.contentWidth, base.tokens.contentWidth, 20);
+  const tokenRadius = asText(tokensSource.radius, base.tokens.radius, 20);
+  const tokenSurface = asText(tokensSource.surface, base.tokens.surface, 20);
+  const tokenFontFamily = asText(tokensSource.fontFamily, base.tokens.fontFamily, 20);
+  const tokenTitleScale = asText(tokensSource.titleScale, base.tokens.titleScale, 20);
 
   const sectionsRaw = Array.isArray(source.home && source.home.sections) ? source.home.sections : base.home.sections;
   const sections = [];
@@ -516,17 +645,8 @@ function normalizeThemeV2(input) {
   if (sections.length === 0) {
     sections.push(...base.home.sections);
   }
-
-  const socialRaw = Array.isArray(source.footer && source.footer.socialLinks) ? source.footer.socialLinks : base.footer.socialLinks;
-  const socialLinks = [];
-  for (const item of socialRaw) {
-    if (!item || typeof item !== 'object') continue;
-    const name = asText(item.name, '', 30);
-    const href = asText(item.href, '', 120);
-    if (!name || !href) continue;
-    socialLinks.push({ name, href });
-    if (socialLinks.length >= 10) break;
-  }
+  const sectionIds = sections.map((section) => section.id);
+  const viewportSource = isObject(source.viewportOverrides) ? source.viewportOverrides : {};
 
   return {
     schema_version: THEME_V2_SCHEMA_VERSION,
@@ -534,6 +654,17 @@ function normalizeThemeV2(input) {
       contentWidth: ['narrow', 'normal', 'wide'].includes(tokenWidth) ? tokenWidth : base.tokens.contentWidth,
       radius: ['none', 'sm', 'md', 'lg'].includes(tokenRadius) ? tokenRadius : base.tokens.radius,
       surface: ['default', 'soft', 'outline'].includes(tokenSurface) ? tokenSurface : base.tokens.surface,
+      fontFamily: ['serif', 'sans', 'mono'].includes(tokenFontFamily) ? tokenFontFamily : base.tokens.fontFamily,
+      accentColor: asColor(tokensSource.accentColor, base.tokens.accentColor),
+      backgroundColor: asColor(tokensSource.backgroundColor, base.tokens.backgroundColor),
+      textColor: asColor(tokensSource.textColor, base.tokens.textColor),
+      sectionGap: clampInt(tokensSource.sectionGap, base.tokens.sectionGap, 8, 64),
+      cardGap: clampInt(tokensSource.cardGap, base.tokens.cardGap, 0, 32),
+      titleScale: ['sm', 'md', 'lg'].includes(tokenTitleScale) ? tokenTitleScale : base.tokens.titleScale,
+    },
+    viewportOverrides: {
+      desktop: normalizeViewportOverride(viewportSource.desktop, sectionIds, base.viewportOverrides.desktop),
+      mobile: normalizeViewportOverride(viewportSource.mobile, sectionIds, base.viewportOverrides.mobile),
     },
     header: {
       announcementEnabled: asBool(source.header && source.header.announcementEnabled, base.header.announcementEnabled),
@@ -543,8 +674,10 @@ function normalizeThemeV2(input) {
     footer: {
       description: asText(source.footer && source.footer.description, base.footer.description, 280),
       motto: asText(source.footer && source.footer.motto, base.footer.motto, 120),
-      socialLinks: socialLinks.length > 0 ? socialLinks : base.footer.socialLinks,
+      socialLinks: normalizeSocialLinks(source.footer && source.footer.socialLinks),
     },
+    mediaLibrary: normalizeMediaLibrary(source.mediaLibrary),
+    pages: normalizePages(source.pages, base.pages),
     home: {
       sections,
     },
@@ -557,7 +690,7 @@ function themeFromLegacyLayout(legacyRaw) {
   if (!legacy || typeof legacy !== 'object') return theme;
 
   if (legacy.header && typeof legacy.header === 'object') {
-    theme.header.announcementEnabled = asBool(legacy.header.announcementEnabled, true);
+    theme.header.announcementEnabled = asBool(legacy.header.announcementEnabled, theme.header.announcementEnabled);
     theme.header.announcementText = asText(legacy.header.announcementText, theme.header.announcementText, 160);
     theme.header.navLinks = normalizeNavLinks(legacy.header.navLinks);
   }
@@ -577,6 +710,7 @@ function themeFromLegacyLayout(legacyRaw) {
         },
       };
     });
+    theme.pages.collection.bannerImage = asText(legacy.hero.backgroundImage, '', 500);
   }
 
   if (legacy.productGrid && typeof legacy.productGrid === 'object') {
@@ -588,6 +722,7 @@ function themeFromLegacyLayout(legacyRaw) {
           ...section.settings,
           title: asText(legacy.productGrid.sectionTitle, section.settings.title, 80),
           itemsPerPage: clampInt(legacy.productGrid.itemsPerPage, section.settings.itemsPerPage, 4, 24),
+          showFilters: true,
         },
       };
     });

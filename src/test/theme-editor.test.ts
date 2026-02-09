@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getActiveThemeV2, legacyLayoutToThemeV2, normalizeThemeV2 } from "@/lib/theme-editor";
+import { applyThemeViewport, getActiveThemeV2, legacyLayoutToThemeV2, normalizeThemeV2 } from "@/lib/theme-editor";
 
 describe("theme-editor", () => {
   it("normalizes invalid payload to safe defaults", () => {
@@ -8,11 +8,13 @@ describe("theme-editor", () => {
       home: { sections: [{ type: "product_grid", settings: { itemsPerPage: 999 } }] },
     });
 
-    expect(theme.schema_version).toBe(2);
+    expect(theme.schema_version).toBe(3);
     expect(theme.header.announcementEnabled).toBe(true);
     expect(theme.home.sections[0].type).toBe("product_grid");
     const sectionSettings = theme.home.sections[0].settings as { itemsPerPage?: number };
     expect(sectionSettings.itemsPerPage).toBe(24);
+    expect(theme.tokens.fontFamily).toBe("serif");
+    expect(theme.pages.collection.title).toBeTruthy();
   });
 
   it("converts legacy layout into v2 structure", () => {
@@ -49,5 +51,39 @@ describe("theme-editor", () => {
 
     expect(active).not.toBeNull();
     expect(inactive).toBeNull();
+  });
+
+  it("applies viewport override and visibility rules", () => {
+    const base = normalizeThemeV2({
+      home: {
+        sections: [
+          {
+            id: "hero-1",
+            type: "hero",
+            enabled: true,
+            visibility: { desktop: true, mobile: false },
+            settings: { title: "A" },
+          },
+          {
+            id: "rich-1",
+            type: "rich_text",
+            enabled: true,
+            visibility: { desktop: true, mobile: true },
+            settings: { heading: "B" },
+          },
+        ],
+      },
+      viewportOverrides: {
+        desktop: { hiddenSectionIds: [] },
+        mobile: { titleScale: "sm", hiddenSectionIds: ["rich-1"] },
+      },
+    });
+
+    const desktop = applyThemeViewport(base, "desktop");
+    const mobile = applyThemeViewport(base, "mobile");
+
+    expect(desktop.sections.length).toBe(2);
+    expect(mobile.sections.length).toBe(0);
+    expect(mobile.tokens.titleScale).toBe("sm");
   });
 });
