@@ -359,7 +359,7 @@ export default function ThemeHomeRenderer({
       normalized.sections.length > 0 ? (
         normalized.sections.map((section) => renderHomeSection(section, ctx))
       ) : (
-        <div className="py-16 text-center text-muted-foreground">No visible sections for this viewport.</div>
+        <div className="py-16 text-center text-muted-foreground">当前视口没有可见的模块。</div>
       )
     ) : page === "collection" ? (
       <ThemeCollectionPreview theme={theme} shopName={shopName} />

@@ -28,6 +28,7 @@ import {
 import { useAdminAuth } from "@/context/AdminAuthContext";
 import { API_URL } from "@/lib/constants";
 import { useToast } from "@/components/ui/use-toast";
+import { cn } from "@/lib/utils";
 import ThemeHomeRenderer from "@/components/ThemeHomeRenderer";
 import {
   createSection,
@@ -173,11 +174,11 @@ function parseLegacyLayout(raw: unknown): LegacyLayout {
 }
 
 function sectionTypeLabel(type: ThemeSectionType) {
-  if (type === "hero") return "Hero";
-  if (type === "product_grid") return "Product Grid";
-  if (type === "tagline") return "Tagline";
-  if (type === "brand_story") return "Brand Story";
-  return "Rich Text";
+  if (type === "hero") return "横幅 Hero";
+  if (type === "product_grid") return "商品网格";
+  if (type === "tagline") return "标语";
+  if (type === "brand_story") return "品牌故事";
+  return "富文本";
 }
 
 function sectionSummary(section: ThemeSection) {
@@ -728,7 +729,7 @@ export const ShopDesignView = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Current Shop</CardTitle>
+                  <CardTitle className="text-base">当前店铺</CardTitle>
                 </CardHeader>
                 <CardContent className="text-sm">
                   <div className="font-medium">{selectedShop.name}</div>
@@ -737,20 +738,20 @@ export const ShopDesignView = () => {
               </Card>
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Theme Status</CardTitle>
+                  <CardTitle className="text-base">主题状态</CardTitle>
                 </CardHeader>
                 <CardContent className="text-sm space-y-2">
                   <Badge variant={themeEnabled ? "default" : "outline"}>
-                    {themeEnabled ? "v2 Enabled" : "v2 Disabled"}
+                    {themeEnabled ? "v2 已启用" : "v2 未启用"}
                   </Badge>
                   <div className="text-muted-foreground">
-                    Published version: {versions[0]?.version_no ?? "none"}
+                    已发布版本: {versions[0]?.version_no ?? "无"}
                   </div>
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Draft Actions</CardTitle>
+                  <CardTitle className="text-base">草稿操作</CardTitle>
                 </CardHeader>
                 <CardContent className="text-sm space-y-2">
                   <Button
@@ -766,7 +767,7 @@ export const ShopDesignView = () => {
                       setRedoStack([]);
                     }}
                   >
-                    Use Published As Draft
+                    使用已发布版本作为草稿
                   </Button>
                 </CardContent>
               </Card>
@@ -830,12 +831,12 @@ export const ShopDesignView = () => {
               <div className="space-y-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Theme Tokens</CardTitle>
-                    <CardDescription>Global width, border radius, and section surface style.</CardDescription>
+                    <CardTitle>主题样式</CardTitle>
+                    <CardDescription>全局宽度、圆角、字体和颜色配置。</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
-                      <Label>Content Width</Label>
+                      <Label>内容宽度</Label>
                       <Select
                         value={themeDraft.tokens.contentWidth}
                         onValueChange={(value) =>
@@ -849,15 +850,15 @@ export const ShopDesignView = () => {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="narrow">Narrow</SelectItem>
-                          <SelectItem value="normal">Normal</SelectItem>
-                          <SelectItem value="wide">Wide</SelectItem>
+                          <SelectItem value="narrow">窄</SelectItem>
+                          <SelectItem value="normal">标准</SelectItem>
+                          <SelectItem value="wide">宽</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Radius</Label>
+                      <Label>圆角</Label>
                       <Select
                         value={themeDraft.tokens.radius}
                         onValueChange={(value) =>
@@ -871,16 +872,16 @@ export const ShopDesignView = () => {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="none">None</SelectItem>
-                          <SelectItem value="sm">Small</SelectItem>
-                          <SelectItem value="md">Medium</SelectItem>
-                          <SelectItem value="lg">Large</SelectItem>
+                          <SelectItem value="none">无</SelectItem>
+                          <SelectItem value="sm">小</SelectItem>
+                          <SelectItem value="md">中</SelectItem>
+                          <SelectItem value="lg">大</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Surface</Label>
+                      <Label>表面风格</Label>
                       <Select
                         value={themeDraft.tokens.surface}
                         onValueChange={(value) =>
@@ -894,15 +895,15 @@ export const ShopDesignView = () => {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="default">Default</SelectItem>
-                          <SelectItem value="soft">Soft</SelectItem>
-                          <SelectItem value="outline">Outline</SelectItem>
+                          <SelectItem value="default">默认</SelectItem>
+                          <SelectItem value="soft">柔和</SelectItem>
+                          <SelectItem value="outline">描边</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Font Family</Label>
+                      <Label>字体</Label>
                       <Select
                         value={themeDraft.tokens.fontFamily}
                         onValueChange={(value) => updateToken("fontFamily", value as ThemeV2["tokens"]["fontFamily"])}
@@ -920,7 +921,7 @@ export const ShopDesignView = () => {
 
                     <div className="grid grid-cols-3 gap-2">
                       <div className="space-y-2">
-                        <Label>Accent</Label>
+                        <Label>主题色</Label>
                         <Input
                           type="color"
                           value={themeDraft.tokens.accentColor}
@@ -928,7 +929,7 @@ export const ShopDesignView = () => {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label>Background</Label>
+                        <Label>背景色</Label>
                         <Input
                           type="color"
                           value={themeDraft.tokens.backgroundColor}
@@ -936,7 +937,7 @@ export const ShopDesignView = () => {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label>Text</Label>
+                        <Label>文字色</Label>
                         <Input
                           type="color"
                           value={themeDraft.tokens.textColor}
@@ -947,7 +948,7 @@ export const ShopDesignView = () => {
 
                     <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-2">
-                        <Label>Section Gap</Label>
+                        <Label>模块间距</Label>
                         <Input
                           type="number"
                           min={8}
@@ -959,7 +960,7 @@ export const ShopDesignView = () => {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label>Card Gap</Label>
+                        <Label>卡片间距</Label>
                         <Input
                           type="number"
                           min={0}
@@ -973,7 +974,7 @@ export const ShopDesignView = () => {
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Title Scale</Label>
+                      <Label>标题大小</Label>
                       <Select
                         value={themeDraft.tokens.titleScale}
                         onValueChange={(value) => updateToken("titleScale", value as ThemeV2["tokens"]["titleScale"])}
@@ -982,9 +983,9 @@ export const ShopDesignView = () => {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="sm">Small</SelectItem>
-                          <SelectItem value="md">Medium</SelectItem>
-                          <SelectItem value="lg">Large</SelectItem>
+                          <SelectItem value="sm">小</SelectItem>
+                          <SelectItem value="md">中</SelectItem>
+                          <SelectItem value="lg">大</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -998,7 +999,7 @@ export const ShopDesignView = () => {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
-                      <Label>Content Width Override</Label>
+                      <Label>内容宽度</Label>
                       <Select
                         value={currentViewportOverride.contentWidth || "follow"}
                         onValueChange={(value) =>
@@ -1011,16 +1012,16 @@ export const ShopDesignView = () => {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="follow">Follow Global</SelectItem>
-                          <SelectItem value="narrow">Narrow</SelectItem>
-                          <SelectItem value="normal">Normal</SelectItem>
-                          <SelectItem value="wide">Wide</SelectItem>
+                          <SelectItem value="follow">跟随全局</SelectItem>
+                          <SelectItem value="narrow">窄</SelectItem>
+                          <SelectItem value="normal">标准</SelectItem>
+                          <SelectItem value="wide">宽</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Title Scale Override</Label>
+                      <Label>标题大小</Label>
                       <Select
                         value={currentViewportOverride.titleScale || "follow"}
                         onValueChange={(value) =>
@@ -1033,17 +1034,17 @@ export const ShopDesignView = () => {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="follow">Follow Global</SelectItem>
-                          <SelectItem value="sm">Small</SelectItem>
-                          <SelectItem value="md">Medium</SelectItem>
-                          <SelectItem value="lg">Large</SelectItem>
+                          <SelectItem value="follow">跟随全局</SelectItem>
+                          <SelectItem value="sm">小</SelectItem>
+                          <SelectItem value="md">中</SelectItem>
+                          <SelectItem value="lg">大</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-2">
-                        <Label>Section Gap</Label>
+                        <Label>模块间距</Label>
                         <Input
                           type="number"
                           min={8}
@@ -1059,7 +1060,7 @@ export const ShopDesignView = () => {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label>Card Gap</Label>
+                        <Label>卡片间距</Label>
                         <Input
                           type="number"
                           min={0}
@@ -1081,12 +1082,12 @@ export const ShopDesignView = () => {
                 {/* header and footer cards */}
                 <Card>
                   <CardHeader>
-                    <CardTitle>Header</CardTitle>
-                    <CardDescription>Announcement bar and navigation links.</CardDescription>
+                    <CardTitle>顶部导航</CardTitle>
+                    <CardDescription>公告栏和导航链接。</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="announcement-enabled">Announcement</Label>
+                      <Label htmlFor="announcement-enabled">公告开关</Label>
                       <Switch
                         id="announcement-enabled"
                         checked={themeDraft.header.announcementEnabled}
@@ -1099,7 +1100,7 @@ export const ShopDesignView = () => {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Announcement Text</Label>
+                      <Label>公告文字</Label>
                       <Input
                         value={themeDraft.header.announcementText}
                         onChange={(event) =>
@@ -1112,7 +1113,7 @@ export const ShopDesignView = () => {
                     </div>
                     <Separator />
                     <div className="space-y-2">
-                      <Label>Navigation Links</Label>
+                      <Label>导航链接</Label>
                       {themeDraft.header.navLinks.map((link, index) => (
                         <div key={`${link.label}-${index}`} className="grid grid-cols-[1fr_1fr_auto] gap-2">
                           <Input
@@ -1175,7 +1176,7 @@ export const ShopDesignView = () => {
                         }
                       >
                         <Plus className="w-4 h-4 mr-2" />
-                        Add Link
+                        添加链接
                       </Button>
                     </div>
                   </CardContent>
@@ -1183,12 +1184,12 @@ export const ShopDesignView = () => {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Footer</CardTitle>
-                    <CardDescription>Description, motto, and social links.</CardDescription>
+                    <CardTitle>底部信息</CardTitle>
+                    <CardDescription>描述、标语和社交链接。</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
-                      <Label>Description</Label>
+                      <Label>描述</Label>
                       <Textarea
                         value={themeDraft.footer.description}
                         onChange={(event) =>
@@ -1200,7 +1201,7 @@ export const ShopDesignView = () => {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Motto</Label>
+                      <Label>标语</Label>
                       <Input
                         value={themeDraft.footer.motto}
                         onChange={(event) =>
@@ -1214,7 +1215,7 @@ export const ShopDesignView = () => {
 
                     <Separator />
                     <div className="space-y-2">
-                      <Label>Social Links</Label>
+                      <Label>社交链接</Label>
                       {themeDraft.footer.socialLinks.map((social, index) => (
                         <div key={`${social.name}-${index}`} className="grid grid-cols-[1fr_1fr_auto] gap-2">
                           <Input
@@ -1277,7 +1278,7 @@ export const ShopDesignView = () => {
                         }
                       >
                         <Plus className="w-4 h-4 mr-2" />
-                        Add Social
+                        添加社交链接
                       </Button>
                     </div>
                   </CardContent>
@@ -1287,32 +1288,32 @@ export const ShopDesignView = () => {
               <div className="xl:col-span-2 space-y-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Homepage Sections</CardTitle>
+                    <CardTitle>首页模块</CardTitle>
                     <CardDescription>
-                      Reorder and edit sections. Disabled sections stay in draft but are not rendered.
+                      排序和编辑模块。禁用的模块保留在草稿中但不会渲染。
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex flex-wrap gap-2">
                       <Button variant="outline" size="sm" onClick={() => addSection("hero")}>
                         <Plus className="w-4 h-4 mr-2" />
-                        Hero
+                        横幅
                       </Button>
                       <Button variant="outline" size="sm" onClick={() => addSection("product_grid")}>
                         <Plus className="w-4 h-4 mr-2" />
-                        Product Grid
+                        商品网格
                       </Button>
                       <Button variant="outline" size="sm" onClick={() => addSection("tagline")}>
                         <Plus className="w-4 h-4 mr-2" />
-                        Tagline
+                        标语
                       </Button>
                       <Button variant="outline" size="sm" onClick={() => addSection("brand_story")}>
                         <Plus className="w-4 h-4 mr-2" />
-                        Brand Story
+                        品牌故事
                       </Button>
                       <Button variant="outline" size="sm" onClick={() => addSection("rich_text")}>
                         <Plus className="w-4 h-4 mr-2" />
-                        Rich Text
+                        富文本
                       </Button>
                     </div>
 
@@ -1397,14 +1398,14 @@ export const ShopDesignView = () => {
                   <Card>
                     <CardHeader>
                       <CardTitle>
-                        Edit Section: {sectionTypeLabel(selectedSection.type)}
+                        编辑模块: {sectionTypeLabel(selectedSection.type)}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       {selectedSection.type === "hero" ? (
                         <>
                           <div className="space-y-2">
-                            <Label>Title</Label>
+                            <Label>标题</Label>
                             <Input
                               value={String((selectedSection.settings as Record<string, unknown>).title || "")}
                               onChange={(event) =>
@@ -1416,7 +1417,7 @@ export const ShopDesignView = () => {
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label>Subtitle</Label>
+                            <Label>副标题</Label>
                             <Textarea
                               value={String((selectedSection.settings as Record<string, unknown>).subtitle || "")}
                               onChange={(event) =>
@@ -1432,7 +1433,7 @@ export const ShopDesignView = () => {
                           </div>
                           <div className="grid md:grid-cols-2 gap-3">
                             <div className="space-y-2">
-                              <Label>CTA Text</Label>
+                              <Label>按钮文字</Label>
                               <Input
                                 value={String((selectedSection.settings as Record<string, unknown>).ctaText || "")}
                                 onChange={(event) =>
@@ -1447,7 +1448,7 @@ export const ShopDesignView = () => {
                               />
                             </div>
                             <div className="space-y-2">
-                              <Label>CTA Link</Label>
+                              <Label>按钮链接</Label>
                               <Input
                                 value={String((selectedSection.settings as Record<string, unknown>).ctaLink || "")}
                                 onChange={(event) =>
@@ -1463,7 +1464,7 @@ export const ShopDesignView = () => {
                             </div>
                           </div>
                           <div className="space-y-2">
-                            <Label>Background Image URL</Label>
+                            <Label>背景图片 URL</Label>
                             <Input
                               value={String(
                                 (selectedSection.settings as Record<string, unknown>).backgroundImage || ""
@@ -1485,7 +1486,7 @@ export const ShopDesignView = () => {
                       {selectedSection.type === "product_grid" ? (
                         <>
                           <div className="space-y-2">
-                            <Label>Section Title</Label>
+                            <Label>标题</Label>
                             <Input
                               value={String((selectedSection.settings as Record<string, unknown>).title || "")}
                               onChange={(event) =>
@@ -1498,7 +1499,7 @@ export const ShopDesignView = () => {
                           </div>
                           <div className="grid md:grid-cols-2 gap-3">
                             <div className="space-y-2">
-                              <Label>Items Per Page</Label>
+                              <Label>每页商品数</Label>
                               <Select
                                 value={String((selectedSection.settings as Record<string, unknown>).itemsPerPage || 8)}
                                 onValueChange={(value) =>
@@ -1525,7 +1526,7 @@ export const ShopDesignView = () => {
                             </div>
                             <div className="flex items-end">
                               <div className="flex items-center justify-between border rounded-md px-3 h-10 w-full">
-                                <Label htmlFor="show-filters">Show Category Filters</Label>
+                                <Label htmlFor="show-filters">显示分类筛选</Label>
                                 <Switch
                                   id="show-filters"
                                   checked={Boolean(
@@ -1549,7 +1550,7 @@ export const ShopDesignView = () => {
 
                       {selectedSection.type === "tagline" ? (
                         <div className="space-y-2">
-                          <Label>Tagline Text</Label>
+                          <Label>标语文字</Label>
                           <Input
                             value={String((selectedSection.settings as Record<string, unknown>).text || "")}
                             onChange={(event) =>
@@ -1565,7 +1566,7 @@ export const ShopDesignView = () => {
                       {selectedSection.type === "brand_story" ? (
                         <>
                           <div className="space-y-2">
-                            <Label>Kicker</Label>
+                            <Label>小标题</Label>
                             <Input
                               value={String((selectedSection.settings as Record<string, unknown>).kicker || "")}
                               onChange={(event) =>
@@ -1580,7 +1581,7 @@ export const ShopDesignView = () => {
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label>Title</Label>
+                            <Label>标题</Label>
                             <Input
                               value={String((selectedSection.settings as Record<string, unknown>).title || "")}
                               onChange={(event) =>
@@ -1595,7 +1596,7 @@ export const ShopDesignView = () => {
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label>Body</Label>
+                            <Label>正文</Label>
                             <Textarea
                               rows={6}
                               value={String((selectedSection.settings as Record<string, unknown>).body || "")}
@@ -1612,7 +1613,7 @@ export const ShopDesignView = () => {
                           </div>
                           <div className="grid md:grid-cols-2 gap-3">
                             <div className="space-y-2">
-                              <Label>Button Text</Label>
+                              <Label>按钮文字</Label>
                               <Input
                                 value={String(
                                   (selectedSection.settings as Record<string, unknown>).buttonText || ""
@@ -1629,7 +1630,7 @@ export const ShopDesignView = () => {
                               />
                             </div>
                             <div className="space-y-2">
-                              <Label>Button Link</Label>
+                              <Label>按钮链接</Label>
                               <Input
                                 value={String(
                                   (selectedSection.settings as Record<string, unknown>).buttonLink || ""
@@ -1652,7 +1653,7 @@ export const ShopDesignView = () => {
                       {selectedSection.type === "rich_text" ? (
                         <>
                           <div className="space-y-2">
-                            <Label>Heading</Label>
+                            <Label>标题</Label>
                             <Input
                               value={String((selectedSection.settings as Record<string, unknown>).heading || "")}
                               onChange={(event) =>
@@ -1667,7 +1668,7 @@ export const ShopDesignView = () => {
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label>Body</Label>
+                            <Label>正文</Label>
                             <Textarea
                               rows={5}
                               value={String((selectedSection.settings as Record<string, unknown>).body || "")}
@@ -1683,7 +1684,7 @@ export const ShopDesignView = () => {
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label>Alignment</Label>
+                            <Label>对齐方式</Label>
                             <Select
                               value={String((selectedSection.settings as Record<string, unknown>).align || "left")}
                               onValueChange={(value) =>
@@ -1700,9 +1701,9 @@ export const ShopDesignView = () => {
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="left">Left</SelectItem>
-                                <SelectItem value="center">Center</SelectItem>
-                                <SelectItem value="right">Right</SelectItem>
+                                <SelectItem value="left">左对齐</SelectItem>
+                                <SelectItem value="center">居中</SelectItem>
+                                <SelectItem value="right">右对齐</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -1713,7 +1714,7 @@ export const ShopDesignView = () => {
                 ) : (
                   <Card>
                     <CardContent className="py-10 text-center text-muted-foreground">
-                      Select a section to edit.
+                      点击左侧模块进行编辑。
                     </CardContent>
                   </Card>
                 )}
@@ -1725,7 +1726,7 @@ export const ShopDesignView = () => {
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <div className="space-y-3">
-                      <h4 className="font-medium">Collection</h4>
+                      <h4 className="font-medium">集合页</h4>
                       <div className="grid md:grid-cols-2 gap-3">
                         <Input
                           value={themeDraft.pages.collection.title}
@@ -1772,7 +1773,7 @@ export const ShopDesignView = () => {
                     <Separator />
 
                     <div className="space-y-3">
-                      <h4 className="font-medium">Product</h4>
+                      <h4 className="font-medium">商品页</h4>
                       <div className="grid md:grid-cols-2 gap-3">
                         <Input
                           value={themeDraft.pages.product.title}
@@ -1817,7 +1818,7 @@ export const ShopDesignView = () => {
                           </SelectContent>
                         </Select>
                         <div className="border rounded-md px-3 py-2 flex items-center justify-between">
-                          <span className="text-sm">Breadcrumb</span>
+                          <span className="text-sm">面包屑导航</span>
                           <Switch
                             checked={themeDraft.pages.product.showBreadcrumbs}
                             onCheckedChange={(checked) =>
@@ -1832,7 +1833,7 @@ export const ShopDesignView = () => {
                           />
                         </div>
                         <div className="border rounded-md px-3 py-2 flex items-center justify-between">
-                          <span className="text-sm">Benefits</span>
+                          <span className="text-sm">卖点展示</span>
                           <Switch
                             checked={themeDraft.pages.product.showBenefits}
                             onCheckedChange={(checked) =>
@@ -1852,7 +1853,7 @@ export const ShopDesignView = () => {
                     <Separator />
 
                     <div className="space-y-3">
-                      <h4 className="font-medium">Support / Company</h4>
+                      <h4 className="font-medium">支持页 / 公司页</h4>
                       <div className="grid md:grid-cols-2 gap-3">
                         <Input
                           value={themeDraft.pages.support.title}
@@ -1862,7 +1863,7 @@ export const ShopDesignView = () => {
                               pages: { ...prev.pages, support: { ...prev.pages.support, title: event.target.value } },
                             }))
                           }
-                          placeholder="Support 标题"
+                          placeholder="支持页标题"
                         />
                         <Input
                           value={themeDraft.pages.support.heroImage}
@@ -1872,7 +1873,7 @@ export const ShopDesignView = () => {
                               pages: { ...prev.pages, support: { ...prev.pages.support, heroImage: event.target.value } },
                             }))
                           }
-                          placeholder="Support 图 URL"
+                          placeholder="支持页图片 URL"
                         />
                       </div>
                       <div className="grid md:grid-cols-2 gap-3">
@@ -1884,7 +1885,7 @@ export const ShopDesignView = () => {
                               pages: { ...prev.pages, company: { ...prev.pages.company, title: event.target.value } },
                             }))
                           }
-                          placeholder="Company 标题"
+                          placeholder="公司页标题"
                         />
                         <Input
                           value={themeDraft.pages.company.heroImage}
@@ -1894,7 +1895,7 @@ export const ShopDesignView = () => {
                               pages: { ...prev.pages, company: { ...prev.pages.company, heroImage: event.target.value } },
                             }))
                           }
-                          placeholder="Company 图 URL"
+                          placeholder="公司页图片 URL"
                         />
                       </div>
                     </div>
@@ -1948,17 +1949,17 @@ export const ShopDesignView = () => {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Version History</CardTitle>
-                    <CardDescription>Every publish and rollback creates a new immutable version.</CardDescription>
+                    <CardTitle>版本历史</CardTitle>
+                    <CardDescription>每次发布和回滚都会创建新的不可变版本。</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-2">
                     {loadingVersions ? (
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        Loading versions...
+                        加载版本中...
                       </div>
                     ) : versions.length === 0 ? (
-                      <div className="text-muted-foreground text-sm">No published versions yet.</div>
+                      <div className="text-muted-foreground text-sm">暂无已发布版本。</div>
                     ) : (
                       versions.map((version) => (
                         <div
@@ -1966,9 +1967,9 @@ export const ShopDesignView = () => {
                           className="border rounded-md p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3"
                         >
                           <div className="text-sm">
-                            <div className="font-medium">Version #{version.version_no}</div>
+                            <div className="font-medium">版本 #{version.version_no}</div>
                             <div className="text-muted-foreground">
-                              schema {version.schema_version} | by {version.created_by || "system"} |{" "}
+                              schema {version.schema_version} | {version.created_by || "system"} |{" "}
                               {new Date(version.created_at).toLocaleString()}
                             </div>
                           </div>
@@ -1979,7 +1980,7 @@ export const ShopDesignView = () => {
                             disabled={publishing}
                           >
                             <RotateCcw className="w-4 h-4 mr-2" />
-                            Rollback
+                            回滚
                           </Button>
                         </div>
                       ))
@@ -1993,16 +1994,16 @@ export const ShopDesignView = () => {
           <TabsContent value="legacy" className="space-y-6 mt-4">
             <Card>
               <CardHeader>
-                <CardTitle>Legacy v1 Layout</CardTitle>
+                <CardTitle>旧版 v1 布局</CardTitle>
                 <CardDescription>
-                  This editor keeps old layout_config stores working. Use it when v2 is disabled.
+                  此编辑器用于维护旧版 layout_config。在 v2 禁用时使用。
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-4">
                   <h3 className="font-medium">Header</h3>
                   <div className="flex items-center justify-between border rounded-md px-3 py-2">
-                    <Label htmlFor="legacy-announce">Announcement Bar</Label>
+                    <Label htmlFor="legacy-announce">公告栏</Label>
                     <Switch
                       id="legacy-announce"
                       checked={legacyLayout.header.announcementEnabled}
@@ -2206,7 +2207,7 @@ export const ShopDesignView = () => {
 
                 <Button onClick={saveLegacy} disabled={savingLegacy}>
                   {savingLegacy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                  Save Legacy Layout
+                  保存旧版布局
                 </Button>
               </CardContent>
             </Card>
