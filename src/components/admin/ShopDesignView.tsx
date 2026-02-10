@@ -24,6 +24,7 @@ import {
   Redo2,
   Monitor,
   Smartphone,
+  GripVertical,
 } from "lucide-react";
 import { useAdminAuth } from "@/context/AdminAuthContext";
 import { API_URL } from "@/lib/constants";
@@ -670,6 +671,8 @@ export const ShopDesignView = () => {
       const copy: ThemeSection = {
         ...source,
         id: `${source.type}-${Date.now()}`,
+        settings: { ...(source.settings as Record<string, unknown>) },
+        visibility: { ...source.visibility },
       };
       list.splice(index + 1, 0, copy);
       setSelectedSectionId(copy.id);
@@ -678,15 +681,15 @@ export const ShopDesignView = () => {
   };
 
   const deleteSection = (sectionId: string) => {
+    if (themeDraft.home.sections.length <= 1) {
+      toast({
+        title: "无法删除",
+        description: "至少需要保留一个模块。",
+        variant: "destructive",
+      });
+      return;
+    }
     updateThemeDraft((prev) => {
-      if (prev.home.sections.length <= 1) {
-        toast({
-          title: "Cannot delete",
-          description: "At least one section is required.",
-          variant: "destructive",
-        });
-        return prev;
-      }
       const next = prev.home.sections.filter((section) => section.id !== sectionId);
       if (selectedSectionId === sectionId) {
         setSelectedSectionId(next[0]?.id || "");
@@ -863,7 +866,7 @@ export const ShopDesignView = () => {
 
         <div className="flex flex-wrap items-center gap-3">
           <Select value={selectedShopId} onValueChange={setSelectedShopId}>
-            <SelectTrigger className="w-[220px]">
+            <SelectTrigger className="w-[220px]" title="选择要编辑装修的店铺">
               <SelectValue placeholder="选择店铺" />
             </SelectTrigger>
             <SelectContent>
@@ -875,30 +878,47 @@ export const ShopDesignView = () => {
             </SelectContent>
           </Select>
 
-          <div className="flex items-center gap-2 border rounded-md px-3 h-10">
+          <div
+            className="flex items-center gap-2 border rounded-md px-3 h-10"
+            title="开：前台使用已发布的 Theme v2。关：前台回退使用 Legacy v1。"
+          >
             <Switch checked={themeEnabled} disabled={togglingEnabled || !selectedShopId} onCheckedChange={toggleThemeEnabled} />
             <span className="text-sm">启用 v2</span>
             {togglingEnabled ? <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /> : null}
           </div>
 
-          <Button variant="outline" onClick={handleUndo} disabled={!canUndo}>
+          <Button variant="outline" onClick={handleUndo} disabled={!canUndo} title="撤销上一步编辑">
             <Undo2 className="w-4 h-4 mr-2" />
             撤销
           </Button>
-          <Button variant="outline" onClick={handleRedo} disabled={!canRedo}>
+          <Button variant="outline" onClick={handleRedo} disabled={!canRedo} title="恢复刚刚撤销的编辑">
             <Redo2 className="w-4 h-4 mr-2" />
             重做
           </Button>
 
-          <Button variant="outline" onClick={() => selectedShopId && (void loadTheme(selectedShopId))} disabled={!selectedShopId}>
+          <Button
+            variant="outline"
+            onClick={() => selectedShopId && (void loadTheme(selectedShopId))}
+            disabled={!selectedShopId}
+            title="从服务器重新拉取当前店铺配置"
+          >
             <RotateCcw className="w-4 h-4 mr-2" />
             刷新
           </Button>
-          <Button variant="outline" onClick={saveDraft} disabled={!selectedShopId || savingDraft || isBusy}>
+          <Button
+            variant="outline"
+            onClick={saveDraft}
+            disabled={!selectedShopId || savingDraft || isBusy}
+            title="仅保存草稿，不会立刻影响前台用户"
+          >
             {savingDraft ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
             保存草稿
           </Button>
-          <Button onClick={publishTheme} disabled={!selectedShopId || publishing || isBusy}>
+          <Button
+            onClick={publishTheme}
+            disabled={!selectedShopId || publishing || isBusy}
+            title="将当前草稿发布为线上版本，前台会立即使用"
+          >
             {publishing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
             发布上线
           </Button>
@@ -914,11 +934,17 @@ export const ShopDesignView = () => {
       {!isBusy && selectedShop ? (
         <Tabs defaultValue="v2" className="w-full">
           <TabsList>
-            <TabsTrigger value="v2" className="gap-2">
+            <TabsTrigger
+              value="v2"
+              className="gap-2"
+              title="Theme v2：新装修系统（可视化、拖拽、发布、回滚）"
+            >
               <Sparkles className="w-4 h-4" />
               Theme v2
             </TabsTrigger>
-            <TabsTrigger value="legacy">Legacy v1</TabsTrigger>
+            <TabsTrigger value="legacy" title="Legacy v1：旧版布局编辑（用于兼容和回退）">
+              Legacy v1
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="v2" className="space-y-6 mt-4">
@@ -954,6 +980,7 @@ export const ShopDesignView = () => {
                     variant="outline"
                     className="w-full"
                     disabled={!publishedTheme}
+                    title="用线上已发布版本覆盖当前草稿，适合回到稳定状态后再改"
                     onClick={() => {
                       if (!publishedTheme) return;
                       const next = normalizeThemeV2(publishedTheme);
@@ -1310,7 +1337,7 @@ export const ShopDesignView = () => {
                     <Separator />
                     <div className="space-y-2">
                       <Label>导航链接</Label>
-                      <div className="text-xs text-muted-foreground">可拖拽排序</div>
+                      <div className="text-xs text-muted-foreground">按住手柄拖拽排序</div>
                       {themeDraft.header.navLinks.map((link, index) => (
                         <div
                           key={`${link.label}-${index}`}
@@ -1320,13 +1347,16 @@ export const ShopDesignView = () => {
                           onDrop={(event) => onNavDrop(event, index)}
                           onDragEnd={onNavDragEnd}
                           className={cn(
-                            "grid grid-cols-[1fr_1fr_auto] gap-2 rounded-md border border-transparent p-1 cursor-move",
-                            draggingNavIndex === index ? "opacity-70" : "",
+                            "grid grid-cols-[auto_1fr_1fr_auto] gap-2 rounded-md border border-transparent p-1 items-center",
+                            draggingNavIndex === index ? "opacity-50" : "",
                             navDropTargetIndex === index && draggingNavIndex !== index
                               ? "border-primary/60 bg-muted/40"
                               : ""
                           )}
                         >
+                          <div className="cursor-grab active:cursor-grabbing px-1">
+                            <GripVertical className="w-4 h-4 text-muted-foreground" />
+                          </div>
                           <Input
                             value={link.label}
                             onChange={(event) =>
@@ -1427,7 +1457,7 @@ export const ShopDesignView = () => {
                     <Separator />
                     <div className="space-y-2">
                       <Label>社交链接</Label>
-                      <div className="text-xs text-muted-foreground">可拖拽排序</div>
+                      <div className="text-xs text-muted-foreground">按住手柄拖拽排序</div>
                       {themeDraft.footer.socialLinks.map((social, index) => (
                         <div
                           key={`${social.name}-${index}`}
@@ -1437,13 +1467,16 @@ export const ShopDesignView = () => {
                           onDrop={(event) => onSocialDrop(event, index)}
                           onDragEnd={onSocialDragEnd}
                           className={cn(
-                            "grid grid-cols-[1fr_1fr_auto] gap-2 rounded-md border border-transparent p-1 cursor-move",
-                            draggingSocialIndex === index ? "opacity-70" : "",
+                            "grid grid-cols-[auto_1fr_1fr_auto] gap-2 rounded-md border border-transparent p-1 items-center",
+                            draggingSocialIndex === index ? "opacity-50" : "",
                             socialDropTargetIndex === index && draggingSocialIndex !== index
                               ? "border-primary/60 bg-muted/40"
                               : ""
                           )}
                         >
+                          <div className="cursor-grab active:cursor-grabbing px-1">
+                            <GripVertical className="w-4 h-4 text-muted-foreground" />
+                          </div>
                           <Input
                             value={social.name}
                             onChange={(event) =>
@@ -1544,7 +1577,7 @@ export const ShopDesignView = () => {
                     </div>
 
                     <div className="space-y-2">
-                      <div className="text-xs text-muted-foreground">拖拽模块可调整前台显示顺序</div>
+                      <div className="text-xs text-muted-foreground">按住左侧手柄拖拽模块可调整前台显示顺序</div>
                       {themeDraft.home.sections.map((section, index) => (
                         <div
                           key={section.id}
@@ -1554,78 +1587,91 @@ export const ShopDesignView = () => {
                           onDrop={(event) => onSectionDrop(event, section.id)}
                           onDragEnd={onSectionDragEnd}
                           className={cn(
-                            "border rounded-md p-3 cursor-move transition-colors",
-                            selectedSectionId === section.id ? "border-primary bg-muted/40" : "",
-                            draggingSectionId === section.id ? "opacity-70" : "",
+                            "border rounded-md transition-all",
+                            selectedSectionId === section.id ? "border-primary bg-muted/40 shadow-sm" : "hover:border-muted-foreground/30",
+                            draggingSectionId === section.id ? "opacity-50 scale-[0.98]" : "",
                             sectionDropTargetId === section.id && draggingSectionId !== section.id
-                              ? "ring-2 ring-primary/50"
+                              ? "ring-2 ring-primary/50 border-primary/40 bg-primary/5"
                               : ""
                           )}
                         >
-                          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                            <button
-                              type="button"
-                              className="text-left flex-1"
-                              onClick={() => setSelectedSectionId(section.id)}
-                            >
-                              <div className="font-medium">
-                                {index + 1}. {sectionTypeLabel(section.type)}
+                          <div className="flex items-stretch">
+                            <div className="flex items-center px-2 cursor-grab active:cursor-grabbing border-r bg-muted/20 rounded-l-md">
+                              <GripVertical className="w-4 h-4 text-muted-foreground" />
+                            </div>
+                            <div className="flex-1 p-3">
+                              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                                <button
+                                  type="button"
+                                  className="text-left flex-1"
+                                  onClick={() => setSelectedSectionId(section.id)}
+                                >
+                                  <div className="font-medium flex items-center gap-2">
+                                    <Badge variant={section.enabled ? "default" : "outline"} className="text-[10px] px-1.5 py-0">
+                                      {index + 1}
+                                    </Badge>
+                                    {sectionTypeLabel(section.type)}
+                                    {!section.enabled && <span className="text-xs text-muted-foreground">(已禁用)</span>}
+                                  </div>
+                                  <div className="text-sm text-muted-foreground mt-0.5 truncate max-w-[300px]">
+                                    {sectionSummary(section)}
+                                  </div>
+                                </button>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <div className="text-xs text-muted-foreground border rounded px-2 py-1 flex items-center gap-1.5">
+                                    启用
+                                    <Switch
+                                      checked={section.enabled}
+                                      onCheckedChange={(checked) =>
+                                        updateSection(section.id, (current) => ({ ...current, enabled: checked }))
+                                      }
+                                    />
+                                  </div>
+                                  <div className="text-xs text-muted-foreground border rounded px-2 py-1 flex items-center gap-1.5">
+                                    <Monitor className="w-3 h-3" />
+                                    <Switch
+                                      checked={section.visibility.desktop}
+                                      onCheckedChange={(checked) =>
+                                        updateSection(section.id, (current) => ({
+                                          ...current,
+                                          visibility: { ...current.visibility, desktop: checked },
+                                        }))
+                                      }
+                                    />
+                                  </div>
+                                  <div className="text-xs text-muted-foreground border rounded px-2 py-1 flex items-center gap-1.5">
+                                    <Smartphone className="w-3 h-3" />
+                                    <Switch
+                                      checked={section.visibility.mobile}
+                                      onCheckedChange={(checked) =>
+                                        updateSection(section.id, (current) => ({
+                                          ...current,
+                                          visibility: { ...current.visibility, mobile: checked },
+                                        }))
+                                      }
+                                    />
+                                  </div>
+                                  <div className="text-xs text-muted-foreground border rounded px-2 py-1 flex items-center gap-1.5">
+                                    隐藏({VIEWPORT_LABEL[previewViewport]})
+                                    <Switch
+                                      checked={currentViewportOverride.hiddenSectionIds.includes(section.id)}
+                                      onCheckedChange={(checked) => toggleHiddenInCurrentViewport(section.id, checked)}
+                                    />
+                                  </div>
+                                  <Button variant="ghost" size="icon" onClick={() => moveSection(section.id, "up")} title="上移">
+                                    <ArrowUp className="w-4 h-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" onClick={() => moveSection(section.id, "down")} title="下移">
+                                    <ArrowDown className="w-4 h-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" onClick={() => duplicateSection(section.id)} title="复制">
+                                    <Copy className="w-4 h-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" onClick={() => deleteSection(section.id)} title="删除">
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
                               </div>
-                              <div className="text-sm text-muted-foreground">
-                                {sectionSummary(section)}
-                                <span className="ml-2 text-[11px] uppercase tracking-wide text-primary/70">drag</span>
-                              </div>
-                            </button>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Switch
-                                checked={section.enabled}
-                                onCheckedChange={(checked) =>
-                                  updateSection(section.id, (current) => ({ ...current, enabled: checked }))
-                                }
-                              />
-                              <div className="text-xs text-muted-foreground border rounded px-2 py-1 flex items-center gap-2">
-                                D
-                                <Switch
-                                  checked={section.visibility.desktop}
-                                  onCheckedChange={(checked) =>
-                                    updateSection(section.id, (current) => ({
-                                      ...current,
-                                      visibility: { ...current.visibility, desktop: checked },
-                                    }))
-                                  }
-                                />
-                              </div>
-                              <div className="text-xs text-muted-foreground border rounded px-2 py-1 flex items-center gap-2">
-                                M
-                                <Switch
-                                  checked={section.visibility.mobile}
-                                  onCheckedChange={(checked) =>
-                                    updateSection(section.id, (current) => ({
-                                      ...current,
-                                      visibility: { ...current.visibility, mobile: checked },
-                                    }))
-                                  }
-                                />
-                              </div>
-                              <div className="text-xs text-muted-foreground border rounded px-2 py-1 flex items-center gap-2">
-                                隐藏({VIEWPORT_LABEL[previewViewport]})
-                                <Switch
-                                  checked={currentViewportOverride.hiddenSectionIds.includes(section.id)}
-                                  onCheckedChange={(checked) => toggleHiddenInCurrentViewport(section.id, checked)}
-                                />
-                              </div>
-                              <Button variant="ghost" size="icon" onClick={() => moveSection(section.id, "up")}>
-                                <ArrowUp className="w-4 h-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" onClick={() => moveSection(section.id, "down")}>
-                                <ArrowDown className="w-4 h-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" onClick={() => duplicateSection(section.id)}>
-                                <Copy className="w-4 h-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" onClick={() => deleteSection(section.id)}>
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
                             </div>
                           </div>
                         </div>
@@ -2095,7 +2141,7 @@ export const ShopDesignView = () => {
                     <Separator />
 
                     <div className="space-y-3">
-                      <h4 className="font-medium">支持页 / 公司页</h4>
+                      <h4 className="font-medium">支持页</h4>
                       <div className="grid md:grid-cols-2 gap-3">
                         <Input
                           value={themeDraft.pages.support.title}
@@ -2108,16 +2154,32 @@ export const ShopDesignView = () => {
                           placeholder="支持页标题"
                         />
                         <Input
-                          value={themeDraft.pages.support.heroImage}
+                          value={themeDraft.pages.support.subtitle}
                           onChange={(event) =>
                             updateThemeDraft((prev) => ({
                               ...prev,
-                              pages: { ...prev.pages, support: { ...prev.pages.support, heroImage: event.target.value } },
+                              pages: { ...prev.pages, support: { ...prev.pages.support, subtitle: event.target.value } },
                             }))
                           }
-                          placeholder="支持页图片 URL"
+                          placeholder="支持页副标题"
                         />
                       </div>
+                      <Input
+                        value={themeDraft.pages.support.heroImage}
+                        onChange={(event) =>
+                          updateThemeDraft((prev) => ({
+                            ...prev,
+                            pages: { ...prev.pages, support: { ...prev.pages.support, heroImage: event.target.value } },
+                          }))
+                        }
+                        placeholder="支持页图片 URL"
+                      />
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-3">
+                      <h4 className="font-medium">公司页</h4>
                       <div className="grid md:grid-cols-2 gap-3">
                         <Input
                           value={themeDraft.pages.company.title}
@@ -2130,16 +2192,26 @@ export const ShopDesignView = () => {
                           placeholder="公司页标题"
                         />
                         <Input
-                          value={themeDraft.pages.company.heroImage}
+                          value={themeDraft.pages.company.subtitle}
                           onChange={(event) =>
                             updateThemeDraft((prev) => ({
                               ...prev,
-                              pages: { ...prev.pages, company: { ...prev.pages.company, heroImage: event.target.value } },
+                              pages: { ...prev.pages, company: { ...prev.pages.company, subtitle: event.target.value } },
                             }))
                           }
-                          placeholder="公司页图片 URL"
+                          placeholder="公司页副标题"
                         />
                       </div>
+                      <Input
+                        value={themeDraft.pages.company.heroImage}
+                        onChange={(event) =>
+                          updateThemeDraft((prev) => ({
+                            ...prev,
+                            pages: { ...prev.pages, company: { ...prev.pages.company, heroImage: event.target.value } },
+                          }))
+                        }
+                        placeholder="公司页图片 URL"
+                      />
                     </div>
 
                     <Separator />
@@ -2416,7 +2488,7 @@ export const ShopDesignView = () => {
                       添加素材
                     </Button>
                     <div className="space-y-2">
-                      <div className="text-xs text-muted-foreground">素材也支持拖拽排序</div>
+                      <div className="text-xs text-muted-foreground">按住手柄拖拽排序素材</div>
                       {themeDraft.mediaLibrary.length === 0 ? (
                         <div className="text-sm text-muted-foreground">暂无素材</div>
                       ) : (
@@ -2429,13 +2501,16 @@ export const ShopDesignView = () => {
                             onDrop={(event) => onAssetDrop(event, asset.id)}
                             onDragEnd={onAssetDragEnd}
                             className={cn(
-                              "border rounded-md p-2 flex items-center gap-2 cursor-move transition-colors",
-                              draggingAssetId === asset.id ? "opacity-70" : "",
+                              "border rounded-md p-2 flex items-center gap-2 transition-colors",
+                              draggingAssetId === asset.id ? "opacity-50" : "",
                               assetDropTargetId === asset.id && draggingAssetId !== asset.id
                                 ? "ring-2 ring-primary/50 bg-muted/40"
                                 : ""
                             )}
                           >
+                            <div className="cursor-grab active:cursor-grabbing">
+                              <GripVertical className="w-4 h-4 text-muted-foreground" />
+                            </div>
                             <Badge variant="outline">{asset.type}</Badge>
                             <div className="flex-1 min-w-0">
                               <div className="font-medium text-sm truncate">{asset.name}</div>
