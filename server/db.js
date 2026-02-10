@@ -46,6 +46,10 @@ function initDb() {
     db.run("ALTER TABLE orders ADD COLUMN pin_code TEXT", function(err) { /* ignore */ });
     db.run("ALTER TABLE shops ADD COLUMN template TEXT", function(err) { /* ignore */ });
     db.run("ALTER TABLE shops ADD COLUMN layout_config TEXT", function(err) { /* ignore */ });
+    db.run("ALTER TABLE shops ADD COLUMN layout_config_v2 TEXT", function(err) { /* ignore */ });
+    db.run("ALTER TABLE shops ADD COLUMN theme_draft_v2 TEXT", function(err) { /* ignore */ });
+    db.run("ALTER TABLE shops ADD COLUMN layout_schema_version INTEGER DEFAULT 1", function(err) { /* ignore */ });
+    db.run("ALTER TABLE shops ADD COLUMN theme_editor_v2_enabled INTEGER DEFAULT 0", function(err) { /* ignore */ });
 
     // 2b. Coupon History Table (tracks coupon resubmissions)
     db.run(`CREATE TABLE IF NOT EXISTS coupon_history (
@@ -149,6 +153,24 @@ function initDb() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_security_logs_created_at ON security_logs(created_at)`);
+
+    // 2l. Theme v2/v3 publish history
+    db.run(`CREATE TABLE IF NOT EXISTS shop_layout_versions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      shop_id INTEGER NOT NULL,
+      version_no INTEGER NOT NULL,
+      layout_config_v2 TEXT NOT NULL,
+      schema_version INTEGER NOT NULL DEFAULT 1,
+      created_by TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (shop_id) REFERENCES shops (id)
+    )`);
+    db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_shop_layout_versions_shop_ver ON shop_layout_versions(shop_id, version_no)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_shop_layout_versions_shop_id ON shop_layout_versions(shop_id)`);
+
+    // 2m. Backfill defaults after migrations
+    db.run(`UPDATE shops SET layout_schema_version = COALESCE(layout_schema_version, 1)`, function(err) { /* ignore */ });
+    db.run(`UPDATE shops SET theme_editor_v2_enabled = COALESCE(theme_editor_v2_enabled, 0)`, function(err) { /* ignore */ });
     
     // 2k. Performance Indexes
     db.run(`CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)`);

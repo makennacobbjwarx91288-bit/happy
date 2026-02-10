@@ -101,7 +101,7 @@ const Footer = () => {
         <div className="mt-16 pt-8 border-t border-primary-foreground/20">
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <p className="text-sm text-primary-foreground/60">
-              © 2026 {shopName}. All rights reserved.
+              (c) 2026 {shopName}. All rights reserved.
             </p>
             <div className="flex items-center gap-6">
               {socialLinks.map((social) => (

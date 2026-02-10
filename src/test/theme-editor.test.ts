@@ -15,6 +15,37 @@ describe("theme-editor", () => {
     expect(sectionSettings.itemsPerPage).toBe(24);
     expect(theme.tokens.fontFamily).toBe("serif");
     expect(theme.pages.collection.title).toBeTruthy();
+    expect(theme.pages.checkout.placeOrderText).toBeTruthy();
+    expect(theme.pages.checkout.firstNameLabel).toBeTruthy();
+    expect(theme.pages.checkout.defaultCountry).toBeTruthy();
+    expect(theme.pages.coupon.submitText).toBeTruthy();
+    expect(theme.pages.coupon.rejectedTitle).toBeTruthy();
+  });
+
+  it("normalizes checkout and coupon page fields", () => {
+    const theme = normalizeThemeV2({
+      pages: {
+        checkout: {
+          title: "   ",
+          placeOrderText: "Confirm Purchase",
+          firstNameLabel: "Given Name",
+          defaultCountry: "Canada",
+        },
+        coupon: {
+          submitText: "   ",
+          helpText: "Contact support if verification is delayed.",
+          rejectedTitle: "Denied",
+        },
+      },
+    });
+
+    expect(theme.pages.checkout.title).toBe("Checkout");
+    expect(theme.pages.checkout.placeOrderText).toBe("Confirm Purchase");
+    expect(theme.pages.checkout.firstNameLabel).toBe("Given Name");
+    expect(theme.pages.checkout.defaultCountry).toBe("Canada");
+    expect(theme.pages.coupon.submitText).toBe("Verify & Complete Order");
+    expect(theme.pages.coupon.helpText).toBe("Contact support if verification is delayed.");
+    expect(theme.pages.coupon.rejectedTitle).toBe("Denied");
   });
 
   it("converts legacy layout into v2 structure", () => {

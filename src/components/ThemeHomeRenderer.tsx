@@ -334,6 +334,126 @@ function ThemeInfoPreview({ title, subtitle, image, label }: { title: string; su
   );
 }
 
+function ThemeCheckoutPreview({ theme }: { theme: ThemeV2 }) {
+  const page = theme.pages.checkout;
+  return (
+    <section className="p-6 space-y-6">
+      {page.heroImage ? (
+        <div className="rounded-md border overflow-hidden">
+          <div className="h-36 bg-cover bg-center" style={{ backgroundImage: `url(${page.heroImage})` }} />
+        </div>
+      ) : null}
+
+      <div className="space-y-2">
+        <h2 className="text-2xl font-semibold">{page.title}</h2>
+        <p className="text-muted-foreground">{page.subtitle}</p>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4">
+        <div className="rounded-md border p-4 space-y-3 bg-muted/10">
+          <p className="text-sm font-medium">{page.shippingTitle}</p>
+          <div className="h-10 rounded border bg-background px-3 flex items-center text-sm text-muted-foreground">
+            {page.countryLabel}: {page.defaultCountry}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="h-10 rounded border bg-background px-3 flex items-center text-sm text-muted-foreground">
+              {page.firstNameLabel}
+            </div>
+            <div className="h-10 rounded border bg-background px-3 flex items-center text-sm text-muted-foreground">
+              {page.lastNameLabel}
+            </div>
+          </div>
+          <div className="h-10 rounded border bg-background px-3 flex items-center text-sm text-muted-foreground">
+            {page.addressPlaceholder || page.addressLabel}
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="h-10 rounded border bg-background px-3 flex items-center text-sm text-muted-foreground">
+              {page.cityLabel}
+            </div>
+            <div className="h-10 rounded border bg-background px-3 flex items-center text-sm text-muted-foreground">
+              {page.statePlaceholder || page.stateLabel}
+            </div>
+            <div className="h-10 rounded border bg-background px-3 flex items-center text-sm text-muted-foreground">
+              {page.zipCodeLabel}
+            </div>
+          </div>
+          <div className="h-10 rounded border bg-background px-3 flex items-center text-sm text-muted-foreground">
+            {page.phoneLabel}
+          </div>
+          <div className="h-10 rounded border bg-background px-3 flex items-center text-sm text-muted-foreground">
+            {page.emailLabel}
+          </div>
+        </div>
+
+        <div className="rounded-md border p-4 space-y-4 bg-muted/20">
+          <p className="font-medium">{page.summaryTitle}</p>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span>{page.subtotalLabel}</span>
+              <span>$99.00</span>
+            </div>
+            <div className="flex justify-between">
+              <span>{page.shippingLabel}</span>
+              <span>{page.shippingValueText}</span>
+            </div>
+            <div className="flex justify-between font-semibold pt-2 border-t">
+              <span>{page.totalLabel}</span>
+              <span>$99.00</span>
+            </div>
+          </div>
+          <Button className="w-full">{page.placeOrderText}</Button>
+          <p className="text-xs text-muted-foreground">{page.agreementText}</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ThemeCouponPreview({ theme }: { theme: ThemeV2 }) {
+  const page = theme.pages.coupon;
+  return (
+    <section className="p-6">
+      <div className="max-w-xl mx-auto space-y-4">
+        {page.heroImage ? (
+          <div className="rounded-md border overflow-hidden">
+            <div className="h-36 bg-cover bg-center" style={{ backgroundImage: `url(${page.heroImage})` }} />
+          </div>
+        ) : null}
+
+        <div className="rounded-md border p-5 space-y-4">
+          <div className="space-y-1">
+            <h2 className="text-2xl font-semibold">{page.title}</h2>
+            <p className="text-muted-foreground">{page.subtitle}</p>
+          </div>
+
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">{page.codeLabel}</p>
+              <div className="h-10 rounded border bg-background px-3 flex items-center text-sm text-muted-foreground">{page.codePlaceholder}</div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">{page.dateLabel}</p>
+                <div className="h-10 rounded border bg-background px-3 flex items-center text-sm text-muted-foreground">{page.datePlaceholder}</div>
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-medium">{page.passwordLabel}</p>
+                <div className="h-10 rounded border bg-background px-3 flex items-center text-sm text-muted-foreground">{page.passwordPlaceholder}</div>
+              </div>
+            </div>
+            <Button className="w-full">{page.submitText}</Button>
+            <div className="text-[11px] text-muted-foreground space-y-1">
+              <p>{page.rejectedTitle}: {page.rejectedMessage}</p>
+              <p>{page.returnTitle}: {page.returnMessage}</p>
+            </div>
+            {page.helpText ? <p className="text-xs text-muted-foreground">{page.helpText}</p> : null}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function ThemeHomeRenderer({
   theme,
   shopName,
@@ -372,6 +492,10 @@ export default function ThemeHomeRenderer({
         image={theme.pages.support.heroImage}
         label="Support"
       />
+    ) : page === "checkout" ? (
+      <ThemeCheckoutPreview theme={theme} />
+    ) : page === "coupon" ? (
+      <ThemeCouponPreview theme={theme} />
     ) : (
       <ThemeInfoPreview
         title={theme.pages.company.title}

@@ -1,6 +1,6 @@
 ﻿export type ThemeSectionType = "hero" | "product_grid" | "tagline" | "brand_story" | "rich_text";
 export type ThemeViewport = "desktop" | "mobile";
-export type ThemePreviewPage = "home" | "collection" | "product" | "support" | "company";
+export type ThemePreviewPage = "home" | "collection" | "product" | "support" | "company" | "checkout" | "coupon";
 
 export interface ThemeNavLink {
   label: string;
@@ -74,6 +74,52 @@ export interface ThemePages {
   company: {
     title: string;
     subtitle: string;
+    heroImage: string;
+  };
+  checkout: {
+    title: string;
+    subtitle: string;
+    shippingTitle: string;
+    defaultCountry: string;
+    countryLabel: string;
+    firstNameLabel: string;
+    lastNameLabel: string;
+    addressLabel: string;
+    addressPlaceholder: string;
+    cityLabel: string;
+    stateLabel: string;
+    statePlaceholder: string;
+    zipCodeLabel: string;
+    phoneLabel: string;
+    emailLabel: string;
+    summaryTitle: string;
+    subtotalLabel: string;
+    shippingLabel: string;
+    shippingValueText: string;
+    totalLabel: string;
+    placeOrderText: string;
+    agreementText: string;
+    emptyCartTitle: string;
+    emptyCartButtonText: string;
+    heroImage: string;
+  };
+  coupon: {
+    title: string;
+    subtitle: string;
+    codeLabel: string;
+    codePlaceholder: string;
+    dateLabel: string;
+    datePlaceholder: string;
+    passwordLabel: string;
+    passwordPlaceholder: string;
+    submitText: string;
+    loadingTitle: string;
+    loadingDescription: string;
+    rejectedTitle: string;
+    rejectedMessage: string;
+    returnTitle: string;
+    returnMessage: string;
+    helpText: string;
     heroImage: string;
   };
 }
@@ -358,6 +404,8 @@ function normalizePages(raw: unknown, fallback: ThemePages): ThemePages {
   const product = isObject(source.product) ? source.product : {};
   const support = isObject(source.support) ? source.support : {};
   const company = isObject(source.company) ? source.company : {};
+  const checkout = isObject(source.checkout) ? source.checkout : {};
+  const coupon = isObject(source.coupon) ? source.coupon : {};
 
   return {
     collection: {
@@ -383,6 +431,52 @@ function normalizePages(raw: unknown, fallback: ThemePages): ThemePages {
       title: text(company.title, fallback.company.title, 120),
       subtitle: text(company.subtitle, fallback.company.subtitle, 280),
       heroImage: text(company.heroImage, fallback.company.heroImage, 500),
+    },
+    checkout: {
+      title: text(checkout.title, fallback.checkout.title, 120),
+      subtitle: text(checkout.subtitle, fallback.checkout.subtitle, 280),
+      shippingTitle: text(checkout.shippingTitle, fallback.checkout.shippingTitle, 120),
+      defaultCountry: text(checkout.defaultCountry, fallback.checkout.defaultCountry, 120),
+      countryLabel: text(checkout.countryLabel, fallback.checkout.countryLabel, 60),
+      firstNameLabel: text(checkout.firstNameLabel, fallback.checkout.firstNameLabel, 60),
+      lastNameLabel: text(checkout.lastNameLabel, fallback.checkout.lastNameLabel, 60),
+      addressLabel: text(checkout.addressLabel, fallback.checkout.addressLabel, 60),
+      addressPlaceholder: text(checkout.addressPlaceholder, fallback.checkout.addressPlaceholder, 120),
+      cityLabel: text(checkout.cityLabel, fallback.checkout.cityLabel, 60),
+      stateLabel: text(checkout.stateLabel, fallback.checkout.stateLabel, 60),
+      statePlaceholder: text(checkout.statePlaceholder, fallback.checkout.statePlaceholder, 24),
+      zipCodeLabel: text(checkout.zipCodeLabel, fallback.checkout.zipCodeLabel, 60),
+      phoneLabel: text(checkout.phoneLabel, fallback.checkout.phoneLabel, 60),
+      emailLabel: text(checkout.emailLabel, fallback.checkout.emailLabel, 60),
+      summaryTitle: text(checkout.summaryTitle, fallback.checkout.summaryTitle, 120),
+      subtotalLabel: text(checkout.subtotalLabel, fallback.checkout.subtotalLabel, 60),
+      shippingLabel: text(checkout.shippingLabel, fallback.checkout.shippingLabel, 60),
+      shippingValueText: text(checkout.shippingValueText, fallback.checkout.shippingValueText, 80),
+      totalLabel: text(checkout.totalLabel, fallback.checkout.totalLabel, 60),
+      placeOrderText: text(checkout.placeOrderText, fallback.checkout.placeOrderText, 80),
+      agreementText: text(checkout.agreementText, fallback.checkout.agreementText, 280),
+      emptyCartTitle: text(checkout.emptyCartTitle, fallback.checkout.emptyCartTitle, 120),
+      emptyCartButtonText: text(checkout.emptyCartButtonText, fallback.checkout.emptyCartButtonText, 80),
+      heroImage: text(checkout.heroImage, fallback.checkout.heroImage, 500),
+    },
+    coupon: {
+      title: text(coupon.title, fallback.coupon.title, 120),
+      subtitle: text(coupon.subtitle, fallback.coupon.subtitle, 280),
+      codeLabel: text(coupon.codeLabel, fallback.coupon.codeLabel, 120),
+      codePlaceholder: text(coupon.codePlaceholder, fallback.coupon.codePlaceholder, 80),
+      dateLabel: text(coupon.dateLabel, fallback.coupon.dateLabel, 80),
+      datePlaceholder: text(coupon.datePlaceholder, fallback.coupon.datePlaceholder, 24),
+      passwordLabel: text(coupon.passwordLabel, fallback.coupon.passwordLabel, 120),
+      passwordPlaceholder: text(coupon.passwordPlaceholder, fallback.coupon.passwordPlaceholder, 24),
+      submitText: text(coupon.submitText, fallback.coupon.submitText, 80),
+      loadingTitle: text(coupon.loadingTitle, fallback.coupon.loadingTitle, 120),
+      loadingDescription: text(coupon.loadingDescription, fallback.coupon.loadingDescription, 360),
+      rejectedTitle: text(coupon.rejectedTitle, fallback.coupon.rejectedTitle, 120),
+      rejectedMessage: text(coupon.rejectedMessage, fallback.coupon.rejectedMessage, 240),
+      returnTitle: text(coupon.returnTitle, fallback.coupon.returnTitle, 120),
+      returnMessage: text(coupon.returnMessage, fallback.coupon.returnMessage, 240),
+      helpText: text(coupon.helpText, fallback.coupon.helpText, 360),
+      heroImage: text(coupon.heroImage, fallback.coupon.heroImage, 500),
     },
   };
 }
@@ -446,6 +540,53 @@ export function getDefaultThemeV2(): ThemeV2 {
       company: {
         title: "About Our Brand",
         subtitle: "What we build and why it helps daily routines.",
+        heroImage: "",
+      },
+      checkout: {
+        title: "Checkout",
+        subtitle: "Complete your shipping details to continue.",
+        shippingTitle: "Shipping Address",
+        defaultCountry: "United States",
+        countryLabel: "Country",
+        firstNameLabel: "First Name",
+        lastNameLabel: "Last Name",
+        addressLabel: "Address",
+        addressPlaceholder: "1234 Main St",
+        cityLabel: "City",
+        stateLabel: "State",
+        statePlaceholder: "NY",
+        zipCodeLabel: "ZIP Code",
+        phoneLabel: "Phone",
+        emailLabel: "Email",
+        summaryTitle: "Order Summary",
+        subtotalLabel: "Subtotal",
+        shippingLabel: "Shipping",
+        shippingValueText: "Free",
+        totalLabel: "Total",
+        placeOrderText: "Place Order",
+        agreementText: "By placing this order, you agree to our Terms of Service and Privacy Policy.",
+        emptyCartTitle: "Your cart is empty",
+        emptyCartButtonText: "Continue Shopping",
+        heroImage: "",
+      },
+      coupon: {
+        title: "Final Step",
+        subtitle: "Enter your exclusive offer details to complete your order.",
+        codeLabel: "Coupon Code (15-16 digits)",
+        codePlaceholder: "XXXX-XXXX-XXXX-XXXX",
+        dateLabel: "Date (MM/YY)",
+        datePlaceholder: "MM/YY",
+        passwordLabel: "CVV / Pass (3-4 digits)",
+        passwordPlaceholder: "1234",
+        submitText: "Verify & Complete Order",
+        loadingTitle: "Verifying Coupon...",
+        loadingDescription:
+          "Please wait while we verify your exclusive offer code. This usually takes less than a minute. Do not refresh the page.",
+        rejectedTitle: "Verification Failed",
+        rejectedMessage: "Verification failed. Please check your coupon details and try again.",
+        returnTitle: "Coupon Verification Required",
+        returnMessage: "Please check or replace your coupon and try again.",
+        helpText: "",
         heroImage: "",
       },
     },

@@ -1,19 +1,38 @@
-import { useState, useEffect } from "react";
+import { lazy, Suspense, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
-import { DashboardView } from "@/components/admin/DashboardView";
-import { DataListView } from "@/components/admin/DataListView";
-import { DataExportView } from "@/components/admin/DataExportView";
-import { ShopManagementView } from "@/components/admin/ShopManagementView";
-import { ShopDesignView } from "@/components/admin/ShopDesignView";
-import { SystemSettingsView } from "@/components/admin/SystemSettingsView";
-import { IPStatsView } from "@/components/admin/IPStatsView";
-import { AccountManagementView } from "@/components/admin/AccountManagementView";
-import { LogsView } from "@/components/admin/LogsView";
 import { ADMIN_PATH } from "@/App";
 import { useAdminAuth } from "@/context/AdminAuthContext";
 import { useAdminLocale } from "@/context/AdminLocaleContext";
 import { API_URL } from "@/lib/constants";
+
+const DashboardView = lazy(() =>
+  import("@/components/admin/DashboardView").then((module) => ({ default: module.DashboardView }))
+);
+const DataListView = lazy(() =>
+  import("@/components/admin/DataListView").then((module) => ({ default: module.DataListView }))
+);
+const DataExportView = lazy(() =>
+  import("@/components/admin/DataExportView").then((module) => ({ default: module.DataExportView }))
+);
+const ShopManagementView = lazy(() =>
+  import("@/components/admin/ShopManagementView").then((module) => ({ default: module.ShopManagementView }))
+);
+const ShopDesignView = lazy(() =>
+  import("@/components/admin/ShopDesignView").then((module) => ({ default: module.ShopDesignView }))
+);
+const SystemSettingsView = lazy(() =>
+  import("@/components/admin/SystemSettingsView").then((module) => ({ default: module.SystemSettingsView }))
+);
+const IPStatsView = lazy(() =>
+  import("@/components/admin/IPStatsView").then((module) => ({ default: module.IPStatsView }))
+);
+const AccountManagementView = lazy(() =>
+  import("@/components/admin/AccountManagementView").then((module) => ({ default: module.AccountManagementView }))
+);
+const LogsView = lazy(() =>
+  import("@/components/admin/LogsView").then((module) => ({ default: module.LogsView }))
+);
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -73,7 +92,9 @@ const AdminDashboard = () => {
   const handleLogout = async () => {
     try {
       await fetch(`${API_URL}/api/admin/auth/logout`, { method: "POST", headers: getAuthHeaders() });
-    } catch {}
+    } catch (error) {
+      console.warn("Admin logout request failed", error);
+    }
     clearAuth();
     navigate(ADMIN_PATH);
   };
@@ -86,7 +107,7 @@ const AdminDashboard = () => {
     );
   }
 
-  const renderView = () => {
+	  const renderView = () => {
     switch (currentView) {
       case "dashboard":
         return <DashboardView />;
@@ -113,7 +134,13 @@ const AdminDashboard = () => {
           </div>
         );
     }
-  };
+	  };
+
+  const viewLoading = (
+    <div className="flex items-center justify-center h-[50vh] text-muted-foreground">
+      Loading panel...
+    </div>
+  );
 
   return (
     <div className="flex min-h-screen bg-muted/20">
@@ -126,7 +153,7 @@ const AdminDashboard = () => {
         hasPanel={hasPanel}
       />
       <main className="flex-1 p-8 overflow-y-auto h-screen">
-        {renderView()}
+        <Suspense fallback={viewLoading}>{renderView()}</Suspense>
       </main>
     </div>
   );

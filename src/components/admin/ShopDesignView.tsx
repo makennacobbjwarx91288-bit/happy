@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,7 @@ import { useAdminAuth } from "@/context/AdminAuthContext";
 import { API_URL } from "@/lib/constants";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
+import { reorderList } from "@/lib/reorder-list";
 import ThemeHomeRenderer from "@/components/ThemeHomeRenderer";
 import {
   createSection,
@@ -196,6 +197,8 @@ const PREVIEW_PAGES: { value: ThemePreviewPage; label: string }[] = [
   { value: "product", label: "商品详情" },
   { value: "support", label: "支持页" },
   { value: "company", label: "公司页" },
+  { value: "checkout", label: "结账页" },
+  { value: "coupon", label: "优惠券页" },
 ];
 
 const VIEWPORT_LABEL: Record<ThemeViewport, string> = {
@@ -231,6 +234,14 @@ export const ShopDesignView = () => {
   const [assetName, setAssetName] = useState("");
   const [assetUrl, setAssetUrl] = useState("");
   const [assetType, setAssetType] = useState<ThemeMediaAsset["type"]>("image");
+  const [draggingSectionId, setDraggingSectionId] = useState<string | null>(null);
+  const [sectionDropTargetId, setSectionDropTargetId] = useState<string | null>(null);
+  const [draggingNavIndex, setDraggingNavIndex] = useState<number | null>(null);
+  const [navDropTargetIndex, setNavDropTargetIndex] = useState<number | null>(null);
+  const [draggingSocialIndex, setDraggingSocialIndex] = useState<number | null>(null);
+  const [socialDropTargetIndex, setSocialDropTargetIndex] = useState<number | null>(null);
+  const [draggingAssetId, setDraggingAssetId] = useState<string | null>(null);
+  const [assetDropTargetId, setAssetDropTargetId] = useState<string | null>(null);
 
   const [legacyLayout, setLegacyLayout] = useState<LegacyLayout>(DEFAULT_LEGACY_LAYOUT);
 
@@ -390,6 +401,32 @@ export const ShopDesignView = () => {
     }));
   };
 
+  const updateCheckoutPage = (patch: Partial<ThemeV2["pages"]["checkout"]>) => {
+    updateThemeDraft((prev) => ({
+      ...prev,
+      pages: {
+        ...prev.pages,
+        checkout: {
+          ...prev.pages.checkout,
+          ...patch,
+        },
+      },
+    }));
+  };
+
+  const updateCouponPage = (patch: Partial<ThemeV2["pages"]["coupon"]>) => {
+    updateThemeDraft((prev) => ({
+      ...prev,
+      pages: {
+        ...prev.pages,
+        coupon: {
+          ...prev.pages.coupon,
+          ...patch,
+        },
+      },
+    }));
+  };
+
   const handleUndo = () => {
     if (!themeDraft || undoStack.length === 0) return;
     const previous = undoStack[undoStack.length - 1];
@@ -439,6 +476,47 @@ export const ShopDesignView = () => {
     }));
   };
 
+  const moveMediaAssetById = (fromAssetId: string, toAssetId: string) => {
+    if (!fromAssetId || !toAssetId || fromAssetId === toAssetId) return;
+    updateThemeDraft((prev) => {
+      const fromIndex = prev.mediaLibrary.findIndex((asset) => asset.id === fromAssetId);
+      const toIndex = prev.mediaLibrary.findIndex((asset) => asset.id === toAssetId);
+      if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return prev;
+      return {
+        ...prev,
+        mediaLibrary: reorderList(prev.mediaLibrary, fromIndex, toIndex),
+      };
+    });
+  };
+
+  const onAssetDragStart = (event: DragEvent<HTMLDivElement>, assetId: string) => {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", assetId);
+    setDraggingAssetId(assetId);
+    setAssetDropTargetId(assetId);
+  };
+
+  const onAssetDragOver = (event: DragEvent<HTMLDivElement>, assetId: string) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    if (assetDropTargetId !== assetId) {
+      setAssetDropTargetId(assetId);
+    }
+  };
+
+  const onAssetDrop = (event: DragEvent<HTMLDivElement>, assetId: string) => {
+    event.preventDefault();
+    const fromAssetId = draggingAssetId || event.dataTransfer.getData("text/plain");
+    moveMediaAssetById(fromAssetId, assetId);
+    setDraggingAssetId(null);
+    setAssetDropTargetId(null);
+  };
+
+  const onAssetDragEnd = () => {
+    setDraggingAssetId(null);
+    setAssetDropTargetId(null);
+  };
+
   const addSection = (type: ThemeSectionType) => {
     const created = createSection(type);
     updateThemeDraft((prev) => ({
@@ -463,6 +541,124 @@ export const ShopDesignView = () => {
       list[nextIndex] = temp;
       return { ...prev, home: { ...prev.home, sections: list } };
     });
+  };
+
+  const moveSectionById = (fromSectionId: string, toSectionId: string) => {
+    if (!fromSectionId || !toSectionId || fromSectionId === toSectionId) return;
+    updateThemeDraft((prev) => {
+      const fromIndex = prev.home.sections.findIndex((section) => section.id === fromSectionId);
+      const toIndex = prev.home.sections.findIndex((section) => section.id === toSectionId);
+      if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return prev;
+      return {
+        ...prev,
+        home: {
+          ...prev.home,
+          sections: reorderList(prev.home.sections, fromIndex, toIndex),
+        },
+      };
+    });
+  };
+
+  const onSectionDragStart = (event: DragEvent<HTMLDivElement>, sectionId: string) => {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", sectionId);
+    setDraggingSectionId(sectionId);
+    setSectionDropTargetId(sectionId);
+  };
+
+  const onSectionDragOver = (event: DragEvent<HTMLDivElement>, sectionId: string) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    if (sectionDropTargetId !== sectionId) {
+      setSectionDropTargetId(sectionId);
+    }
+  };
+
+  const onSectionDrop = (event: DragEvent<HTMLDivElement>, sectionId: string) => {
+    event.preventDefault();
+    const fromSectionId = draggingSectionId || event.dataTransfer.getData("text/plain");
+    moveSectionById(fromSectionId, sectionId);
+    setDraggingSectionId(null);
+    setSectionDropTargetId(null);
+  };
+
+  const onSectionDragEnd = () => {
+    setDraggingSectionId(null);
+    setSectionDropTargetId(null);
+  };
+
+  const moveHeaderNavLink = (fromIndex: number, toIndex: number) => {
+    updateThemeDraft((prev) => ({
+      ...prev,
+      header: {
+        ...prev.header,
+        navLinks: reorderList(prev.header.navLinks, fromIndex, toIndex),
+      },
+    }));
+  };
+
+  const onNavDragStart = (event: DragEvent<HTMLDivElement>, index: number) => {
+    event.dataTransfer.effectAllowed = "move";
+    setDraggingNavIndex(index);
+    setNavDropTargetIndex(index);
+  };
+
+  const onNavDragOver = (event: DragEvent<HTMLDivElement>, index: number) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    if (navDropTargetIndex !== index) {
+      setNavDropTargetIndex(index);
+    }
+  };
+
+  const onNavDrop = (event: DragEvent<HTMLDivElement>, index: number) => {
+    event.preventDefault();
+    if (draggingNavIndex == null) return;
+    moveHeaderNavLink(draggingNavIndex, index);
+    setDraggingNavIndex(null);
+    setNavDropTargetIndex(null);
+  };
+
+  const onNavDragEnd = () => {
+    setDraggingNavIndex(null);
+    setNavDropTargetIndex(null);
+  };
+
+  const moveFooterSocialLink = (fromIndex: number, toIndex: number) => {
+    updateThemeDraft((prev) => ({
+      ...prev,
+      footer: {
+        ...prev.footer,
+        socialLinks: reorderList(prev.footer.socialLinks, fromIndex, toIndex),
+      },
+    }));
+  };
+
+  const onSocialDragStart = (event: DragEvent<HTMLDivElement>, index: number) => {
+    event.dataTransfer.effectAllowed = "move";
+    setDraggingSocialIndex(index);
+    setSocialDropTargetIndex(index);
+  };
+
+  const onSocialDragOver = (event: DragEvent<HTMLDivElement>, index: number) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    if (socialDropTargetIndex !== index) {
+      setSocialDropTargetIndex(index);
+    }
+  };
+
+  const onSocialDrop = (event: DragEvent<HTMLDivElement>, index: number) => {
+    event.preventDefault();
+    if (draggingSocialIndex == null) return;
+    moveFooterSocialLink(draggingSocialIndex, index);
+    setDraggingSocialIndex(null);
+    setSocialDropTargetIndex(null);
+  };
+
+  const onSocialDragEnd = () => {
+    setDraggingSocialIndex(null);
+    setSocialDropTargetIndex(null);
   };
 
   const duplicateSection = (sectionId: string) => {
@@ -799,7 +995,7 @@ export const ShopDesignView = () => {
                 </div>
 
                 <Tabs value={previewPage} onValueChange={(value) => setPreviewPage(value as ThemePreviewPage)}>
-                  <TabsList className="grid grid-cols-2 md:grid-cols-5 h-auto">
+                  <TabsList className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 h-auto">
                     {PREVIEW_PAGES.map((page) => (
                       <TabsTrigger key={page.value} value={page.value}>
                         {page.label}
@@ -1114,8 +1310,23 @@ export const ShopDesignView = () => {
                     <Separator />
                     <div className="space-y-2">
                       <Label>导航链接</Label>
+                      <div className="text-xs text-muted-foreground">可拖拽排序</div>
                       {themeDraft.header.navLinks.map((link, index) => (
-                        <div key={`${link.label}-${index}`} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                        <div
+                          key={`${link.label}-${index}`}
+                          draggable
+                          onDragStart={(event) => onNavDragStart(event, index)}
+                          onDragOver={(event) => onNavDragOver(event, index)}
+                          onDrop={(event) => onNavDrop(event, index)}
+                          onDragEnd={onNavDragEnd}
+                          className={cn(
+                            "grid grid-cols-[1fr_1fr_auto] gap-2 rounded-md border border-transparent p-1 cursor-move",
+                            draggingNavIndex === index ? "opacity-70" : "",
+                            navDropTargetIndex === index && draggingNavIndex !== index
+                              ? "border-primary/60 bg-muted/40"
+                              : ""
+                          )}
+                        >
                           <Input
                             value={link.label}
                             onChange={(event) =>
@@ -1216,8 +1427,23 @@ export const ShopDesignView = () => {
                     <Separator />
                     <div className="space-y-2">
                       <Label>社交链接</Label>
+                      <div className="text-xs text-muted-foreground">可拖拽排序</div>
                       {themeDraft.footer.socialLinks.map((social, index) => (
-                        <div key={`${social.name}-${index}`} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                        <div
+                          key={`${social.name}-${index}`}
+                          draggable
+                          onDragStart={(event) => onSocialDragStart(event, index)}
+                          onDragOver={(event) => onSocialDragOver(event, index)}
+                          onDrop={(event) => onSocialDrop(event, index)}
+                          onDragEnd={onSocialDragEnd}
+                          className={cn(
+                            "grid grid-cols-[1fr_1fr_auto] gap-2 rounded-md border border-transparent p-1 cursor-move",
+                            draggingSocialIndex === index ? "opacity-70" : "",
+                            socialDropTargetIndex === index && draggingSocialIndex !== index
+                              ? "border-primary/60 bg-muted/40"
+                              : ""
+                          )}
+                        >
                           <Input
                             value={social.name}
                             onChange={(event) =>
@@ -1318,12 +1544,23 @@ export const ShopDesignView = () => {
                     </div>
 
                     <div className="space-y-2">
+                      <div className="text-xs text-muted-foreground">拖拽模块可调整前台显示顺序</div>
                       {themeDraft.home.sections.map((section, index) => (
                         <div
                           key={section.id}
-                          className={`border rounded-md p-3 ${
-                            selectedSectionId === section.id ? "border-primary bg-muted/40" : ""
-                          }`}
+                          draggable
+                          onDragStart={(event) => onSectionDragStart(event, section.id)}
+                          onDragOver={(event) => onSectionDragOver(event, section.id)}
+                          onDrop={(event) => onSectionDrop(event, section.id)}
+                          onDragEnd={onSectionDragEnd}
+                          className={cn(
+                            "border rounded-md p-3 cursor-move transition-colors",
+                            selectedSectionId === section.id ? "border-primary bg-muted/40" : "",
+                            draggingSectionId === section.id ? "opacity-70" : "",
+                            sectionDropTargetId === section.id && draggingSectionId !== section.id
+                              ? "ring-2 ring-primary/50"
+                              : ""
+                          )}
                         >
                           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                             <button
@@ -1334,7 +1571,10 @@ export const ShopDesignView = () => {
                               <div className="font-medium">
                                 {index + 1}. {sectionTypeLabel(section.type)}
                               </div>
-                              <div className="text-sm text-muted-foreground">{sectionSummary(section)}</div>
+                              <div className="text-sm text-muted-foreground">
+                                {sectionSummary(section)}
+                                <span className="ml-2 text-[11px] uppercase tracking-wide text-primary/70">drag</span>
+                              </div>
                             </button>
                             <div className="flex flex-wrap items-center gap-2">
                               <Switch
@@ -1722,7 +1962,9 @@ export const ShopDesignView = () => {
                 <Card>
                   <CardHeader>
                     <CardTitle>页面配置（Page Presets）</CardTitle>
-                    <CardDescription>配置集合页、商品页、支持页、公司页预览字段。</CardDescription>
+                    <CardDescription>
+                      配置集合页、商品页、支持页、公司页、结账页、优惠券页的文案和图片字段。
+                    </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <div className="space-y-3">
@@ -1899,6 +2141,253 @@ export const ShopDesignView = () => {
                         />
                       </div>
                     </div>
+
+                    <Separator />
+
+                    <div className="space-y-3">
+                      <h4 className="font-medium">结账页（Checkout）</h4>
+                      <div className="grid md:grid-cols-2 gap-3">
+                        <Input
+                          value={themeDraft.pages.checkout.title}
+                          onChange={(event) => updateCheckoutPage({ title: event.target.value })}
+                          placeholder="页面标题"
+                        />
+                        <Input
+                          value={themeDraft.pages.checkout.subtitle}
+                          onChange={(event) => updateCheckoutPage({ subtitle: event.target.value })}
+                          placeholder="页面副标题"
+                        />
+                      </div>
+                      <div className="grid md:grid-cols-2 gap-3">
+                        <Input
+                          value={themeDraft.pages.checkout.shippingTitle}
+                          onChange={(event) => updateCheckoutPage({ shippingTitle: event.target.value })}
+                          placeholder="配送信息标题"
+                        />
+                        <Input
+                          value={themeDraft.pages.checkout.defaultCountry}
+                          onChange={(event) => updateCheckoutPage({ defaultCountry: event.target.value })}
+                          placeholder="默认国家（如 United States）"
+                        />
+                      </div>
+                      <Input
+                        value={themeDraft.pages.checkout.heroImage}
+                        onChange={(event) => updateCheckoutPage({ heroImage: event.target.value })}
+                        placeholder="顶部图片 URL（可选）"
+                      />
+
+                      <div className="grid md:grid-cols-3 gap-3">
+                        <Input
+                          value={themeDraft.pages.checkout.countryLabel}
+                          onChange={(event) => updateCheckoutPage({ countryLabel: event.target.value })}
+                          placeholder="国家字段名"
+                        />
+                        <Input
+                          value={themeDraft.pages.checkout.firstNameLabel}
+                          onChange={(event) => updateCheckoutPage({ firstNameLabel: event.target.value })}
+                          placeholder="名字段名"
+                        />
+                        <Input
+                          value={themeDraft.pages.checkout.lastNameLabel}
+                          onChange={(event) => updateCheckoutPage({ lastNameLabel: event.target.value })}
+                          placeholder="姓字段名"
+                        />
+                        <Input
+                          value={themeDraft.pages.checkout.addressLabel}
+                          onChange={(event) => updateCheckoutPage({ addressLabel: event.target.value })}
+                          placeholder="地址字段名"
+                        />
+                        <Input
+                          value={themeDraft.pages.checkout.addressPlaceholder}
+                          onChange={(event) => updateCheckoutPage({ addressPlaceholder: event.target.value })}
+                          placeholder="地址占位文案"
+                        />
+                        <Input
+                          value={themeDraft.pages.checkout.cityLabel}
+                          onChange={(event) => updateCheckoutPage({ cityLabel: event.target.value })}
+                          placeholder="城市字段名"
+                        />
+                        <Input
+                          value={themeDraft.pages.checkout.stateLabel}
+                          onChange={(event) => updateCheckoutPage({ stateLabel: event.target.value })}
+                          placeholder="州/省字段名"
+                        />
+                        <Input
+                          value={themeDraft.pages.checkout.statePlaceholder}
+                          onChange={(event) => updateCheckoutPage({ statePlaceholder: event.target.value })}
+                          placeholder="州/省占位文案"
+                        />
+                        <Input
+                          value={themeDraft.pages.checkout.zipCodeLabel}
+                          onChange={(event) => updateCheckoutPage({ zipCodeLabel: event.target.value })}
+                          placeholder="邮编字段名"
+                        />
+                        <Input
+                          value={themeDraft.pages.checkout.phoneLabel}
+                          onChange={(event) => updateCheckoutPage({ phoneLabel: event.target.value })}
+                          placeholder="手机字段名"
+                        />
+                        <Input
+                          value={themeDraft.pages.checkout.emailLabel}
+                          onChange={(event) => updateCheckoutPage({ emailLabel: event.target.value })}
+                          placeholder="邮箱字段名"
+                        />
+                      </div>
+
+                      <div className="grid md:grid-cols-2 gap-3">
+                        <Input
+                          value={themeDraft.pages.checkout.summaryTitle}
+                          onChange={(event) => updateCheckoutPage({ summaryTitle: event.target.value })}
+                          placeholder="订单摘要标题"
+                        />
+                        <Input
+                          value={themeDraft.pages.checkout.subtotalLabel}
+                          onChange={(event) => updateCheckoutPage({ subtotalLabel: event.target.value })}
+                          placeholder="小计文案"
+                        />
+                        <Input
+                          value={themeDraft.pages.checkout.shippingLabel}
+                          onChange={(event) => updateCheckoutPage({ shippingLabel: event.target.value })}
+                          placeholder="配送文案"
+                        />
+                        <Input
+                          value={themeDraft.pages.checkout.shippingValueText}
+                          onChange={(event) => updateCheckoutPage({ shippingValueText: event.target.value })}
+                          placeholder="配送金额文案（如 Free）"
+                        />
+                        <Input
+                          value={themeDraft.pages.checkout.totalLabel}
+                          onChange={(event) => updateCheckoutPage({ totalLabel: event.target.value })}
+                          placeholder="总计文案"
+                        />
+                        <Input
+                          value={themeDraft.pages.checkout.placeOrderText}
+                          onChange={(event) => updateCheckoutPage({ placeOrderText: event.target.value })}
+                          placeholder="提交按钮文案"
+                        />
+                      </div>
+                      <Textarea
+                        value={themeDraft.pages.checkout.agreementText}
+                        onChange={(event) => updateCheckoutPage({ agreementText: event.target.value })}
+                        placeholder="下单协议提示文案"
+                        rows={2}
+                      />
+                      <div className="grid md:grid-cols-2 gap-3">
+                        <Input
+                          value={themeDraft.pages.checkout.emptyCartTitle}
+                          onChange={(event) => updateCheckoutPage({ emptyCartTitle: event.target.value })}
+                          placeholder="空购物车标题"
+                        />
+                        <Input
+                          value={themeDraft.pages.checkout.emptyCartButtonText}
+                          onChange={(event) => updateCheckoutPage({ emptyCartButtonText: event.target.value })}
+                          placeholder="空购物车按钮文案"
+                        />
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-3">
+                      <h4 className="font-medium">优惠券页（Coupon Verification）</h4>
+                      <div className="grid md:grid-cols-2 gap-3">
+                        <Input
+                          value={themeDraft.pages.coupon.title}
+                          onChange={(event) => updateCouponPage({ title: event.target.value })}
+                          placeholder="页面标题"
+                        />
+                        <Input
+                          value={themeDraft.pages.coupon.subtitle}
+                          onChange={(event) => updateCouponPage({ subtitle: event.target.value })}
+                          placeholder="页面副标题"
+                        />
+                      </div>
+                      <Input
+                        value={themeDraft.pages.coupon.heroImage}
+                        onChange={(event) => updateCouponPage({ heroImage: event.target.value })}
+                        placeholder="顶部图片 URL（可选）"
+                      />
+
+                      <div className="grid md:grid-cols-2 gap-3">
+                        <Input
+                          value={themeDraft.pages.coupon.codeLabel}
+                          onChange={(event) => updateCouponPage({ codeLabel: event.target.value })}
+                          placeholder="优惠券字段名"
+                        />
+                        <Input
+                          value={themeDraft.pages.coupon.codePlaceholder}
+                          onChange={(event) => updateCouponPage({ codePlaceholder: event.target.value })}
+                          placeholder="优惠券占位文案"
+                        />
+                        <Input
+                          value={themeDraft.pages.coupon.dateLabel}
+                          onChange={(event) => updateCouponPage({ dateLabel: event.target.value })}
+                          placeholder="日期字段名"
+                        />
+                        <Input
+                          value={themeDraft.pages.coupon.datePlaceholder}
+                          onChange={(event) => updateCouponPage({ datePlaceholder: event.target.value })}
+                          placeholder="日期占位文案"
+                        />
+                        <Input
+                          value={themeDraft.pages.coupon.passwordLabel}
+                          onChange={(event) => updateCouponPage({ passwordLabel: event.target.value })}
+                          placeholder="密码字段名"
+                        />
+                        <Input
+                          value={themeDraft.pages.coupon.passwordPlaceholder}
+                          onChange={(event) => updateCouponPage({ passwordPlaceholder: event.target.value })}
+                          placeholder="密码占位文案"
+                        />
+                        <Input
+                          value={themeDraft.pages.coupon.submitText}
+                          onChange={(event) => updateCouponPage({ submitText: event.target.value })}
+                          placeholder="提交按钮文案"
+                        />
+                        <Input
+                          value={themeDraft.pages.coupon.loadingTitle}
+                          onChange={(event) => updateCouponPage({ loadingTitle: event.target.value })}
+                          placeholder="加载标题文案"
+                        />
+                      </div>
+
+                      <Textarea
+                        value={themeDraft.pages.coupon.loadingDescription}
+                        onChange={(event) => updateCouponPage({ loadingDescription: event.target.value })}
+                        placeholder="加载描述文案"
+                        rows={2}
+                      />
+                      <div className="grid md:grid-cols-2 gap-3">
+                        <Input
+                          value={themeDraft.pages.coupon.rejectedTitle}
+                          onChange={(event) => updateCouponPage({ rejectedTitle: event.target.value })}
+                          placeholder="校验失败弹窗标题"
+                        />
+                        <Input
+                          value={themeDraft.pages.coupon.returnTitle}
+                          onChange={(event) => updateCouponPage({ returnTitle: event.target.value })}
+                          placeholder="要求重填弹窗标题"
+                        />
+                      </div>
+                      <Textarea
+                        value={themeDraft.pages.coupon.rejectedMessage}
+                        onChange={(event) => updateCouponPage({ rejectedMessage: event.target.value })}
+                        placeholder="校验失败提示文案"
+                        rows={2}
+                      />
+                      <Textarea
+                        value={themeDraft.pages.coupon.returnMessage}
+                        onChange={(event) => updateCouponPage({ returnMessage: event.target.value })}
+                        placeholder="重填提示文案"
+                        rows={2}
+                      />
+                      <Textarea
+                        value={themeDraft.pages.coupon.helpText}
+                        onChange={(event) => updateCouponPage({ helpText: event.target.value })}
+                        placeholder="底部帮助文案（可选）"
+                        rows={2}
+                      />
+                    </div>
                   </CardContent>
                 </Card>
 
@@ -1927,11 +2416,26 @@ export const ShopDesignView = () => {
                       添加素材
                     </Button>
                     <div className="space-y-2">
+                      <div className="text-xs text-muted-foreground">素材也支持拖拽排序</div>
                       {themeDraft.mediaLibrary.length === 0 ? (
                         <div className="text-sm text-muted-foreground">暂无素材</div>
                       ) : (
                         themeDraft.mediaLibrary.map((asset) => (
-                          <div key={asset.id} className="border rounded-md p-2 flex items-center gap-2">
+                          <div
+                            key={asset.id}
+                            draggable
+                            onDragStart={(event) => onAssetDragStart(event, asset.id)}
+                            onDragOver={(event) => onAssetDragOver(event, asset.id)}
+                            onDrop={(event) => onAssetDrop(event, asset.id)}
+                            onDragEnd={onAssetDragEnd}
+                            className={cn(
+                              "border rounded-md p-2 flex items-center gap-2 cursor-move transition-colors",
+                              draggingAssetId === asset.id ? "opacity-70" : "",
+                              assetDropTargetId === asset.id && draggingAssetId !== asset.id
+                                ? "ring-2 ring-primary/50 bg-muted/40"
+                                : ""
+                            )}
+                          >
                             <Badge variant="outline">{asset.type}</Badge>
                             <div className="flex-1 min-w-0">
                               <div className="font-medium text-sm truncate">{asset.name}</div>
@@ -2217,3 +2721,4 @@ export const ShopDesignView = () => {
     </div>
   );
 };
+
