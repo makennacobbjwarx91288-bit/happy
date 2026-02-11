@@ -9,7 +9,7 @@ import { useShop } from "@/context/ShopContext";
 import { getActiveThemeV2 } from "@/lib/theme-editor";
 
 const Index = () => {
-  const { config } = useShop();
+  const { config, loading } = useShop();
   const activeTheme = getActiveThemeV2(config as unknown as Record<string, unknown>);
   const shopName = config?.name || "Shop";
 
@@ -17,7 +17,7 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       <Header />
       <main>
-        {activeTheme ? (
+        {loading ? null : activeTheme ? (
           <ThemeHomeRenderer theme={activeTheme} shopName={shopName} />
         ) : (
           <>

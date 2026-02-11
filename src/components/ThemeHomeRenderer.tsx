@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import ProductCard from "@/components/ProductCard";
@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { products } from "@/data/products";
 import {
   applyThemeViewport,
+  type ThemeCatalogProduct,
   type ThemePreviewPage,
   type ThemeSection,
   type ThemeTokens,
@@ -48,6 +49,7 @@ const titleScaleMap: Record<ThemeTokens["titleScale"], string> = {
 interface RendererContext {
   tokens: ThemeTokens;
   interactive: boolean;
+  productList: ThemeCatalogProduct[];
 }
 
 interface ThemeHomeRendererProps {
@@ -134,10 +136,10 @@ const ThemeProductGridSection = ({ section, ctx }: { section: ThemeSection; ctx:
   const filteredProducts = useMemo(() => {
     const list =
       selectedCategory === "All"
-        ? products
-        : products.filter((product) => product.category === selectedCategory);
+        ? ctx.productList
+        : ctx.productList.filter((product) => product.category === selectedCategory);
     return list.slice(0, itemsLimit);
-  }, [selectedCategory, itemsLimit]);
+  }, [ctx.productList, selectedCategory, itemsLimit]);
 
   return (
     <section className="py-16 px-6">
@@ -271,11 +273,312 @@ const ThemeRichTextSection = ({ section, ctx }: { section: ThemeSection; ctx: Re
   );
 };
 
+const ThemeImageCarouselSection = ({ section, ctx }: { section: ThemeSection; ctx: RendererContext }) => {
+  const settings = section.settings as { title?: string; images?: string[]; autoPlay?: boolean; interval?: number };
+  const images = Array.isArray(settings.images) ? settings.images.filter(Boolean) : [];
+  const [activeIndex, setActiveIndex] = useState(0);
+  const interval = (settings.interval || 4) * 1000;
+
+  useEffect(() => {
+    if (!settings.autoPlay || images.length <= 1) return;
+    const id = setInterval(() => {
+      setActiveIndex((prev) => (prev + 1) % images.length);
+    }, interval);
+    return () => clearInterval(id);
+  }, [images.length, settings.autoPlay, interval]);
+
+  if (images.length === 0) {
+    return (
+      <section className="py-16 px-6">
+        <div className="container mx-auto text-center text-muted-foreground">
+          {settings.title && <h3 className={cn("font-semibold mb-4", titleScaleMap[ctx.tokens.titleScale])}>{settings.title}</h3>}
+          <div className="h-64 border-2 border-dashed rounded-md flex items-center justify-center">
+            Add images to this carousel
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="py-16 px-6">
+      <div className="container mx-auto">
+        {settings.title && <h3 className={cn("font-semibold text-center mb-8", titleScaleMap[ctx.tokens.titleScale])}>{settings.title}</h3>}
+        <div className="relative overflow-hidden rounded-md" style={{ aspectRatio: "16/7" }}>
+          {images.map((url, i) => (
+            <motion.div
+              key={i}
+              className="absolute inset-0 bg-cover bg-center"
+              style={{ backgroundImage: `url(${url})` }}
+              initial={false}
+              animate={{ opacity: i === activeIndex ? 1 : 0 }}
+              transition={{ duration: 0.6 }}
+            />
+          ))}
+          {images.length > 1 && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-10">
+              {images.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setActiveIndex(i)}
+                  className={cn("w-2.5 h-2.5 rounded-full transition-all", i === activeIndex ? "scale-125" : "bg-white/50")}
+                  style={i === activeIndex ? { backgroundColor: ctx.tokens.accentColor } : undefined}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+};
+
+const ThemeVideoEmbedSection = ({ section, ctx }: { section: ThemeSection; ctx: RendererContext }) => {
+  const settings = section.settings as { title?: string; videoUrl?: string; aspectRatio?: string; caption?: string };
+  const videoUrl = settings.videoUrl || "";
+  const aspectRatio = settings.aspectRatio || "16:9";
+  const aspectClass = aspectRatio === "4:3" ? "aspect-[4/3]" : aspectRatio === "1:1" ? "aspect-square" : "aspect-video";
+
+  const embedUrl = useMemo(() => {
+    if (!videoUrl) return "";
+    const ytMatch = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/);
+    if (ytMatch) return `https://www.youtube.com/embed/${ytMatch[1]}`;
+    const vimeoMatch = videoUrl.match(/vimeo\.com\/(\d+)/);
+    if (vimeoMatch) return `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+    return videoUrl;
+  }, [videoUrl]);
+
+  return (
+    <section className="py-16 px-6">
+      <div className="container mx-auto max-w-4xl">
+        {settings.title && <h3 className={cn("font-semibold text-center mb-8", titleScaleMap[ctx.tokens.titleScale])}>{settings.title}</h3>}
+        {embedUrl ? (
+          <div className={cn("w-full overflow-hidden rounded-md", aspectClass)}>
+            <iframe
+              src={embedUrl}
+              className="w-full h-full"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              title={settings.title || "Video"}
+            />
+          </div>
+        ) : (
+          <div className={cn("w-full border-2 border-dashed rounded-md flex items-center justify-center text-muted-foreground", aspectClass)}>
+            Add a video URL
+          </div>
+        )}
+        {settings.caption && <p className="mt-4 text-center text-sm text-muted-foreground">{settings.caption}</p>}
+      </div>
+    </section>
+  );
+};
+
+const ThemeTestimonialsSection = ({ section, ctx }: { section: ThemeSection; ctx: RendererContext }) => {
+  const settings = section.settings as {
+    title?: string;
+    items?: { author: string; content: string; rating: number }[];
+  };
+  const items = Array.isArray(settings.items) ? settings.items : [];
+
+  return (
+    <section className="py-16 px-6">
+      <div className="container mx-auto">
+        <h3 className={cn("font-semibold text-center mb-10", titleScaleMap[ctx.tokens.titleScale])}>
+          {settings.title || "What Our Customers Say"}
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {items.map((item, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: i * 0.1, duration: 0.4 }}
+              className="border rounded-md p-6 space-y-3"
+            >
+              <div className="flex gap-0.5">
+                {Array.from({ length: 5 }).map((_, s) => (
+                  <span key={s} style={{ color: s < item.rating ? ctx.tokens.accentColor : "#d4d4d4" }}>&#9733;</span>
+                ))}
+              </div>
+              <p className="text-sm leading-relaxed">{item.content}</p>
+              <p className="text-xs font-medium text-muted-foreground">— {item.author}</p>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};
+
+const ThemeDividerSection = ({ section }: { section: ThemeSection; ctx: RendererContext }) => {
+  const settings = section.settings as { style?: string; height?: number };
+  const style = settings.style || "line";
+  const height = settings.height || 1;
+
+  if (style === "space") {
+    return <div style={{ height: `${height}px` }} />;
+  }
+
+  if (style === "dots") {
+    return (
+      <div className="py-8 flex items-center justify-center gap-3">
+        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />
+        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />
+        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-6">
+      <div className="container mx-auto">
+        <hr className="border-border" style={{ borderWidth: `${Math.min(height, 4)}px` }} />
+      </div>
+    </div>
+  );
+};
+
+const ThemeCountdownSection = ({ section, ctx }: { section: ThemeSection; ctx: RendererContext }) => {
+  const settings = section.settings as {
+    title?: string;
+    subtitle?: string;
+    endDate?: string;
+    ctaText?: string;
+    ctaLink?: string;
+  };
+  const navigate = useNavigate();
+
+  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+
+  useEffect(() => {
+    if (!settings.endDate) return;
+    const target = new Date(settings.endDate).getTime();
+    const tick = () => {
+      const diff = Math.max(0, target - Date.now());
+      setTimeLeft({
+        days: Math.floor(diff / 86400000),
+        hours: Math.floor((diff % 86400000) / 3600000),
+        minutes: Math.floor((diff % 3600000) / 60000),
+        seconds: Math.floor((diff % 60000) / 1000),
+      });
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [settings.endDate]);
+
+  const unitBoxes = [
+    { label: "Days", value: timeLeft.days },
+    { label: "Hours", value: timeLeft.hours },
+    { label: "Minutes", value: timeLeft.minutes },
+    { label: "Seconds", value: timeLeft.seconds },
+  ];
+
+  return (
+    <section className="py-16 px-6" style={{ backgroundColor: ctx.tokens.accentColor + "10" }}>
+      <div className="container mx-auto text-center space-y-6">
+        <h3 className={cn("font-semibold", titleScaleMap[ctx.tokens.titleScale])}>{settings.title || "Limited Time Offer"}</h3>
+        {settings.subtitle && <p className="text-muted-foreground">{settings.subtitle}</p>}
+
+        {settings.endDate ? (
+          <div className="flex justify-center gap-4">
+            {unitBoxes.map((u) => (
+              <div key={u.label} className="border rounded-md p-3 min-w-[72px]">
+                <div className="text-2xl font-bold" style={{ color: ctx.tokens.accentColor }}>
+                  {String(u.value).padStart(2, "0")}
+                </div>
+                <div className="text-xs text-muted-foreground uppercase tracking-wider">{u.label}</div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-sm text-muted-foreground">Set an end date to display the countdown</div>
+        )}
+
+        {settings.ctaText && (
+          <div>
+            {ctx.interactive ? (
+              <Button
+                size="lg"
+                className="rounded-none px-8"
+                style={{ backgroundColor: ctx.tokens.accentColor }}
+                onClick={() => navigate(settings.ctaLink || "/shop")}
+              >
+                {settings.ctaText}
+              </Button>
+            ) : (
+              <Button size="lg" className="rounded-none px-8" style={{ backgroundColor: ctx.tokens.accentColor }}>
+                {settings.ctaText}
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+};
+
+const ThemeFeaturedCollectionSection = ({ section, ctx }: { section: ThemeSection; ctx: RendererContext }) => {
+  const navigate = useNavigate();
+  const settings = section.settings as {
+    title?: string;
+    subtitle?: string;
+    productIds?: string[];
+    columns?: number;
+  };
+  const columns = settings.columns || 4;
+
+  const displayProducts = useMemo(() => {
+    const productIds = Array.isArray(settings.productIds) ? settings.productIds : [];
+    if (productIds.length === 0) return ctx.productList.slice(0, columns);
+    return productIds
+      .map((id) => ctx.productList.find((p) => p.id === id))
+      .filter((p): p is ThemeCatalogProduct => Boolean(p));
+  }, [settings.productIds, ctx.productList, columns]);
+
+  return (
+    <section className="py-16 px-6">
+      <div className="container mx-auto space-y-8">
+        <div className="text-center">
+          <h3 className={cn("font-semibold", titleScaleMap[ctx.tokens.titleScale])}>{settings.title || "Featured Collection"}</h3>
+          {settings.subtitle && <p className="mt-2 text-muted-foreground">{settings.subtitle}</p>}
+        </div>
+        <div
+          className="grid grid-cols-1 sm:grid-cols-2"
+          style={{ gap: `${ctx.tokens.cardGap}px`, gridTemplateColumns: `repeat(${Math.min(columns, 6)}, minmax(0, 1fr))` }}
+        >
+          {displayProducts.map((product, index) => (
+            <ProductCard
+              key={`${section.id}-${product.id}`}
+              image={product.image}
+              title={product.title}
+              price={product.displayPrice}
+              description={product.description}
+              index={index}
+              onClick={() => {
+                if (!ctx.interactive) return;
+                navigate(`/product/${product.id}`);
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};
+
 function renderHomeSection(section: ThemeSection, ctx: RendererContext) {
   if (section.type === "hero") return <ThemeHeroSection key={section.id} section={section} ctx={ctx} />;
   if (section.type === "product_grid") return <ThemeProductGridSection key={section.id} section={section} ctx={ctx} />;
   if (section.type === "tagline") return <ThemeTaglineSection key={section.id} section={section} ctx={ctx} />;
   if (section.type === "brand_story") return <ThemeBrandStorySection key={section.id} section={section} ctx={ctx} />;
+  if (section.type === "image_carousel") return <ThemeImageCarouselSection key={section.id} section={section} ctx={ctx} />;
+  if (section.type === "video_embed") return <ThemeVideoEmbedSection key={section.id} section={section} ctx={ctx} />;
+  if (section.type === "testimonials") return <ThemeTestimonialsSection key={section.id} section={section} ctx={ctx} />;
+  if (section.type === "divider") return <ThemeDividerSection key={section.id} section={section} ctx={ctx} />;
+  if (section.type === "countdown_timer") return <ThemeCountdownSection key={section.id} section={section} ctx={ctx} />;
+  if (section.type === "featured_collection") return <ThemeFeaturedCollectionSection key={section.id} section={section} ctx={ctx} />;
   return <ThemeRichTextSection key={section.id} section={section} ctx={ctx} />;
 }
 
@@ -349,13 +652,13 @@ function ThemeCheckoutPreview({ theme }: { theme: ThemeV2 }) {
         <p className="text-muted-foreground">{page.subtitle}</p>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-4">
+      <div className="grid lg:grid-cols-2 gap-4">
         <div className="rounded-md border p-4 space-y-3 bg-muted/10">
           <p className="text-sm font-medium">{page.shippingTitle}</p>
           <div className="h-10 rounded border bg-background px-3 flex items-center text-sm text-muted-foreground">
             {page.countryLabel}: {page.defaultCountry}
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div className="h-10 rounded border bg-background px-3 flex items-center text-sm text-muted-foreground">
               {page.firstNameLabel}
             </div>
@@ -366,7 +669,7 @@ function ThemeCheckoutPreview({ theme }: { theme: ThemeV2 }) {
           <div className="h-10 rounded border bg-background px-3 flex items-center text-sm text-muted-foreground">
             {page.addressPlaceholder || page.addressLabel}
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <div className="h-10 rounded border bg-background px-3 flex items-center text-sm text-muted-foreground">
               {page.cityLabel}
             </div>
@@ -403,6 +706,43 @@ function ThemeCheckoutPreview({ theme }: { theme: ThemeV2 }) {
           </div>
           <Button className="w-full">{page.placeOrderText}</Button>
           <p className="text-xs text-muted-foreground">{page.agreementText}</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ThemePinPreview({ theme }: { theme: ThemeV2 }) {
+  const page = theme.pages.pin;
+  return (
+    <section className="p-6">
+      <div className="max-w-lg mx-auto space-y-4">
+        {page.heroImage ? (
+          <div className="rounded-md border overflow-hidden">
+            <div className="h-36 bg-cover bg-center" style={{ backgroundImage: `url(${page.heroImage})` }} />
+          </div>
+        ) : null}
+
+        <div className="rounded-md border p-5 space-y-4">
+          <div className="space-y-1">
+            <h2 className="text-2xl font-semibold">{page.title}</h2>
+            <p className="text-muted-foreground">{page.subtitle}</p>
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-sm font-medium">{page.codeLabel}</p>
+            <div className="h-10 rounded border bg-background px-3 flex items-center text-sm text-muted-foreground">
+              {page.codePlaceholder}
+            </div>
+          </div>
+
+          <Button className="w-full">{page.submitText}</Button>
+          <div className="text-[11px] text-muted-foreground space-y-1">
+            <p>{page.loadingTitle}</p>
+            <p>{page.invalidCodeMessage}</p>
+            <p>{page.rejectedMessage}</p>
+          </div>
+          {page.helpText ? <p className="text-xs text-muted-foreground">{page.helpText}</p> : null}
         </div>
       </div>
     </section>
@@ -462,10 +802,12 @@ export default function ThemeHomeRenderer({
   interactive = true,
 }: ThemeHomeRendererProps) {
   const normalized = useMemo(() => applyThemeViewport(theme, viewport), [theme, viewport]);
+  const catalogProducts = theme.catalog.products.length > 0 ? theme.catalog.products : products;
 
   const ctx: RendererContext = {
     tokens: normalized.tokens,
     interactive,
+    productList: catalogProducts,
   };
 
   const wrapperStyle: React.CSSProperties = {
@@ -496,6 +838,8 @@ export default function ThemeHomeRenderer({
       <ThemeCheckoutPreview theme={theme} />
     ) : page === "coupon" ? (
       <ThemeCouponPreview theme={theme} />
+    ) : page === "pin" ? (
+      <ThemePinPreview theme={theme} />
     ) : (
       <ThemeInfoPreview
         title={theme.pages.company.title}
@@ -524,3 +868,5 @@ export default function ThemeHomeRenderer({
     </div>
   );
 }
+
+

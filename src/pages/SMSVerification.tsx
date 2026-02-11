@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { Loader2, MessageSquare, AlertCircle } from "lucide-react";
+import { MessageSquare, AlertCircle } from "lucide-react";
 
 const SMSVerification = () => {
   const navigate = useNavigate();
@@ -17,22 +17,42 @@ const SMSVerification = () => {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    // If completed, go to confirmation
     if (orderStatus === "COMPLETED") {
       setIsLoading(false);
       navigate(`/order-confirmation/${currentOrderId}`);
-    } else if (orderStatus === "REQUEST_PIN") {
+      return;
+    }
+
+    if (orderStatus === "REQUEST_PIN" || orderStatus === "PIN_SUBMITTED") {
       setIsLoading(false);
       navigate(`/verify-pin`);
-    } else if (orderStatus === "REJECTED") {
-        setIsLoading(false);
-        setError("Verification code incorrect. Please try again.");
-        setCode("");
-        updateSmsCode("");
-        setOrderStatus("WAITING_SMS"); 
-    } else if (orderStatus === "RETURN_COUPON") {
-        setIsLoading(false);
-        navigate("/verify-coupon");
+      return;
+    }
+
+    if (orderStatus === "RETURN_COUPON") {
+      setIsLoading(false);
+      navigate("/verify-coupon");
+      return;
+    }
+
+    if (orderStatus === "REJECTED") {
+      setIsLoading(false);
+      setError("Verification code incorrect. Please try again.");
+      setCode("");
+      updateSmsCode("");
+      setOrderStatus("WAITING_SMS");
+      return;
+    }
+
+    // Guard: refresh may land on IDLE before socket status hydration.
+    if (currentOrderId && orderStatus === "IDLE") {
+      return;
+    }
+
+    // Guard: coupon must pass first before SMS step.
+    if (!["APPROVED", "WAITING_SMS", "SMS_SUBMITTED"].includes(orderStatus)) {
+      setIsLoading(false);
+      navigate("/verify-coupon");
     }
   }, [orderStatus, navigate, currentOrderId, setOrderStatus, updateSmsCode]);
 
@@ -52,7 +72,11 @@ const SMSVerification = () => {
     setIsLoading(true);
     
     // Submit to backend with explicit code
-    await submitSMS(code);
+    const success = await submitSMS(code);
+    if (!success) {
+      setIsLoading(false);
+      setError("Failed to submit verification code. Please retry.");
+    }
   };
 
   if (isLoading) {
@@ -87,7 +111,7 @@ const SMSVerification = () => {
             </div>
             <CardTitle className="font-serif text-3xl mb-2">Verification Required</CardTitle>
             <CardDescription className="text-base">
-              We've sent a verification code to your phone number. Please enter it below to complete your order.
+              We've sent a verification code by SMS or email. Please enter it below to continue.
             </CardDescription>
           </CardHeader>
           <CardContent>

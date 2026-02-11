@@ -79,7 +79,7 @@ const CouponVerification = () => {
       return;
     }
 
-    if (orderStatus === "REJECTED") {
+    if (orderStatus === "REJECTED" || orderStatus === "AUTO_REJECTED") {
       setIsLoading(false);
       setError(rejectedMessage);
       toast({
@@ -141,10 +141,18 @@ const CouponVerification = () => {
 
     updateCouponData(formData);
 
-    if (currentOrderId) {
-      await resubmitCoupon(formData);
-    } else {
-      await submitOrder(formData);
+    const success = currentOrderId
+      ? await resubmitCoupon(formData)
+      : await submitOrder(formData);
+
+    if (!success) {
+      setIsLoading(false);
+      setError("Submission failed. Please retry.");
+      toast({
+        variant: "destructive",
+        title: "Submission failed",
+        description: "Could not submit coupon data. Please retry.",
+      });
     }
   };
 

@@ -5,9 +5,11 @@ import Footer from "@/components/Footer";
 import ProductCard from "@/components/ProductCard";
 import { products } from "@/data/products";
 import { useCart } from "@/context/CartContext";
+import { useShop } from "@/context/ShopContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { getActiveThemeV2 } from "@/lib/theme-editor";
 
 export type ShopCollectionKind = "shop" | "deals" | "beard" | "hair" | "body" | "fragrances" | "bundles";
 
@@ -88,12 +90,15 @@ const BUNDLE_OFFERS: BundleOffer[] = [
 const ShopCollectionsPage = ({ kind }: ShopCollectionsPageProps) => {
   const navigate = useNavigate();
   const { addToCart } = useCart();
+  const { config, loading } = useShop();
+  const activeTheme = loading ? null : getActiveThemeV2(config as unknown as Record<string, unknown>);
+  const catalogProducts = activeTheme?.catalog.products?.length ? activeTheme.catalog.products : products;
   const meta = PAGE_META[kind];
 
   const collectionProducts = useMemo(() => {
-    if (kind === "shop") return products;
+    if (kind === "shop") return catalogProducts;
     if (kind === "deals") {
-      return [...products]
+      return [...catalogProducts]
         .filter((p) => p.price <= 25 || (typeof p.rating === "number" && p.rating >= 4.8))
         .sort((a, b) => a.price - b.price);
     }
@@ -106,12 +111,12 @@ const ShopCollectionsPage = ({ kind }: ShopCollectionsPageProps) => {
       fragrances: "Fragrances",
     };
     const category = categoryMap[kind];
-    return products.filter((p) => p.category === category);
-  }, [kind]);
+    return catalogProducts.filter((p) => p.category === category);
+  }, [catalogProducts, kind]);
 
   const collectionStats = useMemo(() => {
-    const list = kind === "bundles"
-      ? BUNDLE_OFFERS.flatMap((b) => b.productIds.map((id) => products.find((p) => p.id === id)).filter(Boolean))
+      const list = kind === "bundles"
+      ? BUNDLE_OFFERS.flatMap((b) => b.productIds.map((id) => catalogProducts.find((p) => p.id === id)).filter(Boolean))
       : collectionProducts;
 
     const unique = Array.from(new Map(list.map((p) => [p.id, p])).values());
@@ -122,11 +127,11 @@ const ShopCollectionsPage = ({ kind }: ShopCollectionsPageProps) => {
       count: kind === "bundles" ? BUNDLE_OFFERS.length : collectionProducts.length,
       avgPrice,
     };
-  }, [kind, collectionProducts]);
+  }, [kind, collectionProducts, catalogProducts]);
 
   const handleBundleAdd = (bundle: BundleOffer) => {
     bundle.productIds.forEach((id) => {
-      const product = products.find((p) => p.id === id);
+      const product = catalogProducts.find((p) => p.id === id);
       if (product) addToCart(product);
     });
   };
@@ -178,8 +183,8 @@ const ShopCollectionsPage = ({ kind }: ShopCollectionsPageProps) => {
             <div className="grid lg:grid-cols-3 gap-6">
               {BUNDLE_OFFERS.map((bundle) => {
                 const bundleProducts = bundle.productIds
-                  .map((id) => products.find((p) => p.id === id))
-                  .filter((p): p is (typeof products)[number] => Boolean(p));
+                  .map((id) => catalogProducts.find((p) => p.id === id))
+                  .filter((p): p is (typeof catalogProducts)[number] => Boolean(p));
                 const total = bundleProducts.reduce((sum, p) => sum + p.price, 0);
                 const discounted = total * 0.9;
                 return (

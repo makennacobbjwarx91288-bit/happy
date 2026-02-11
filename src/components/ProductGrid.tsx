@@ -4,25 +4,34 @@ import ProductCard from "./ProductCard";
 import { products } from "@/data/products";
 import { Button } from "@/components/ui/button";
 import { useShop } from "@/context/ShopContext";
+import { getActiveThemeV2, getLegacyLayout } from "@/lib/theme-editor";
 
 const categories = ["All", "Beard", "Hair", "Body", "Fragrances"];
 
 const ProductGrid = () => {
   const navigate = useNavigate();
-  const { config } = useShop();
+  const { config, loading } = useShop();
   const [selectedCategory, setSelectedCategory] = useState("All");
-
-  const gridConfig = config?.layout_config?.productGrid || {};
-  const sectionTitle = gridConfig.sectionTitle;
-  const itemsLimit = gridConfig.itemsPerPage || 100;
+  const activeTheme = loading ? null : getActiveThemeV2(config as unknown as Record<string, unknown>);
+  const catalogProducts = activeTheme?.catalog.products?.length ? activeTheme.catalog.products : products;
+  const legacyLayout = getLegacyLayout(config as unknown as Record<string, unknown>);
+  const gridConfig =
+    legacyLayout.productGrid && typeof legacyLayout.productGrid === "object" && !Array.isArray(legacyLayout.productGrid)
+      ? (legacyLayout.productGrid as Record<string, unknown>)
+      : {};
+  const sectionTitle = typeof gridConfig.sectionTitle === "string" ? gridConfig.sectionTitle : "";
+  const parsedLimit = Number(gridConfig.itemsPerPage);
+  const itemsLimit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 100;
 
   const handleProductClick = (id: string) => {
     navigate(`/product/${id}`);
   };
 
-  const filteredProducts = (selectedCategory === "All" 
-    ? products 
-    : products.filter(p => p.category === selectedCategory)).slice(0, itemsLimit);
+  const filteredProducts = (
+    selectedCategory === "All"
+      ? catalogProducts
+      : catalogProducts.filter((p) => p.category === selectedCategory)
+  ).slice(0, itemsLimit);
 
   return (
     <section className="py-16 px-6">

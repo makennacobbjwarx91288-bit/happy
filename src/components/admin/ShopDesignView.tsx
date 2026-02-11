@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,9 +10,20 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Loader2,
   Save,
   Upload,
+  Download,
   RotateCcw,
   Plus,
   ArrowUp,
@@ -37,6 +48,7 @@ import {
   getDefaultThemeV2,
   legacyLayoutToThemeV2,
   normalizeThemeV2,
+  type ThemeCatalogProduct,
   type ThemeMediaAsset,
   type ThemePreviewPage,
   type ThemeSection,
@@ -104,6 +116,9 @@ const DEFAULT_LEGACY_LAYOUT: LegacyLayout = {
     itemsPerPage: 8,
   },
 };
+
+const TEMPLATE_EXPORT_FORMAT = "theme-v2-template";
+const MAX_IMAGE_UPLOAD_SIZE = 3 * 1024 * 1024;
 
 function parseLegacyLayout(raw: unknown): LegacyLayout {
   let parsed: unknown = raw;
@@ -175,12 +190,22 @@ function parseLegacyLayout(raw: unknown): LegacyLayout {
   };
 }
 
+const SECTION_TYPE_LABELS: Record<ThemeSectionType, string> = {
+  hero: "Hero 横幅",
+  product_grid: "商品网格",
+  tagline: "标语",
+  brand_story: "品牌故事",
+  rich_text: "富文本",
+  image_carousel: "图片轮播",
+  video_embed: "视频嵌入",
+  testimonials: "客户评价",
+  divider: "分隔符",
+  countdown_timer: "倒计时",
+  featured_collection: "精选集合",
+};
+
 function sectionTypeLabel(type: ThemeSectionType) {
-  if (type === "hero") return "横幅 Hero";
-  if (type === "product_grid") return "商品网格";
-  if (type === "tagline") return "标语";
-  if (type === "brand_story") return "品牌故事";
-  return "富文本";
+  return SECTION_TYPE_LABELS[type] || type;
 }
 
 function sectionSummary(section: ThemeSection) {
@@ -189,22 +214,29 @@ function sectionSummary(section: ThemeSection) {
   if (section.type === "product_grid") return String(settings.title || "Product section");
   if (section.type === "tagline") return String(settings.text || "Tagline section");
   if (section.type === "brand_story") return String(settings.title || "Brand story section");
+  if (section.type === "image_carousel") return String(settings.title || "图片轮播");
+  if (section.type === "video_embed") return String(settings.title || "视频嵌入");
+  if (section.type === "testimonials") return String(settings.title || "客户评价");
+  if (section.type === "divider") return `分隔符 (${settings.style || "line"})`;
+  if (section.type === "countdown_timer") return String(settings.title || "倒计时");
+  if (section.type === "featured_collection") return String(settings.title || "精选集合");
   return String(settings.heading || "Custom rich text");
 }
 
 const PREVIEW_PAGES: { value: ThemePreviewPage; label: string }[] = [
-  { value: "home", label: "首页" },
-  { value: "collection", label: "集合页" },
-  { value: "product", label: "商品详情" },
-  { value: "support", label: "支持页" },
-  { value: "company", label: "公司页" },
-  { value: "checkout", label: "结账页" },
-  { value: "coupon", label: "优惠券页" },
+  { value: "home", label: "Home" },
+  { value: "collection", label: "Collection" },
+  { value: "product", label: "Product" },
+  { value: "support", label: "Support" },
+  { value: "company", label: "Company" },
+  { value: "checkout", label: "Checkout" },
+  { value: "coupon", label: "Coupon" },
+  { value: "pin", label: "PIN" },
 ];
 
 const VIEWPORT_LABEL: Record<ThemeViewport, string> = {
-  desktop: "电脑端",
-  mobile: "手机端",
+  desktop: "Desktop",
+  mobile: "Mobile",
 };
 
 export const ShopDesignView = () => {
@@ -244,7 +276,21 @@ export const ShopDesignView = () => {
   const [draggingAssetId, setDraggingAssetId] = useState<string | null>(null);
   const [assetDropTargetId, setAssetDropTargetId] = useState<string | null>(null);
 
+  // Auto-save state
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
+  const [lastAutoSave, setLastAutoSave] = useState<Date | null>(null);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftSnapshotRef = useRef<string>("");
+
+  // Confirmation dialogs
+  const [confirmPublishOpen, setConfirmPublishOpen] = useState(false);
+  const [confirmRollbackOpen, setConfirmRollbackOpen] = useState(false);
+  const [confirmRollbackVersionId, setConfirmRollbackVersionId] = useState<number | null>(null);
+  const [confirmDeleteSectionId, setConfirmDeleteSectionId] = useState<string | null>(null);
+
   const [legacyLayout, setLegacyLayout] = useState<LegacyLayout>(DEFAULT_LEGACY_LAYOUT);
+  const templateImportInputRef = useRef<HTMLInputElement | null>(null);
+  const productImportInputRef = useRef<HTMLInputElement | null>(null);
 
   const selectedSection = useMemo(
     () => themeDraft.home.sections.find((section) => section.id === selectedSectionId) || null,
@@ -426,6 +472,392 @@ export const ShopDesignView = () => {
         },
       },
     }));
+  };
+
+  const updatePinPage = (patch: Partial<ThemeV2["pages"]["pin"]>) => {
+    updateThemeDraft((prev) => ({
+      ...prev,
+      pages: {
+        ...prev.pages,
+        pin: {
+          ...prev.pages.pin,
+          ...patch,
+        },
+      },
+    }));
+  };
+
+  const updateCatalogProduct = (productId: string, patch: Partial<ThemeCatalogProduct>) => {
+    updateThemeDraft((prev) => ({
+      ...prev,
+      catalog: {
+        ...prev.catalog,
+        products: prev.catalog.products.map((product) =>
+          product.id === productId ? { ...product, ...patch } : product
+        ),
+      },
+    }));
+  };
+
+  const updateCatalogProductNumber = (
+    productId: string,
+    field: "price" | "rating" | "reviews",
+    value: string
+  ) => {
+    const parsed = Number(value);
+    const normalized = Number.isFinite(parsed) ? parsed : 0;
+
+    if (field === "price") {
+      updateCatalogProduct(productId, { price: Math.max(0, normalized) });
+      return;
+    }
+
+    if (field === "rating") {
+      updateCatalogProduct(productId, { rating: Math.max(0, Math.min(5, normalized)) });
+      return;
+    }
+
+    updateCatalogProduct(productId, { reviews: Math.max(0, Math.round(normalized)) });
+  };
+
+  const setCatalogProductCoverImage = (productId: string, imageUrl: string) => {
+    updateThemeDraft((prev) => ({
+      ...prev,
+      catalog: {
+        ...prev.catalog,
+        products: prev.catalog.products.map((product) => {
+          if (product.id !== productId) return product;
+          const normalizedImage = imageUrl.trim();
+          const nextImages = normalizedImage
+            ? [normalizedImage, ...product.images.filter((url) => url !== normalizedImage)]
+            : product.images;
+          return {
+            ...product,
+            image: normalizedImage,
+            images: nextImages,
+          };
+        }),
+      },
+    }));
+  };
+
+  const setCatalogProductImagesFromText = (productId: string, value: string) => {
+    const nextImages = value
+      .split(/[\r\n,]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    updateThemeDraft((prev) => ({
+      ...prev,
+      catalog: {
+        ...prev.catalog,
+        products: prev.catalog.products.map((product) => {
+          if (product.id !== productId) return product;
+          const fallbackImage = product.image || product.images[0] || "";
+          const normalizedImages = nextImages.length > 0 ? nextImages : fallbackImage ? [fallbackImage] : [];
+          return {
+            ...product,
+            image: normalizedImages[0] || "",
+            images: normalizedImages,
+          };
+        }),
+      },
+    }));
+  };
+
+  const addCatalogProduct = () => {
+    updateThemeDraft((prev) => {
+      const nextIndex = prev.catalog.products.length + 1;
+      const created: ThemeCatalogProduct = {
+        id: `product-${Date.now()}-${nextIndex}`,
+        title: `New Product ${nextIndex}`,
+        description: "Product description",
+        category: "Beard",
+        price: 0,
+        displayPrice: "$0.00",
+        image: "",
+        images: [],
+        rating: 4.5,
+        reviews: 0,
+      };
+
+      return {
+        ...prev,
+        catalog: {
+          ...prev.catalog,
+          products: [...prev.catalog.products, created],
+        },
+      };
+    });
+  };
+
+  const removeCatalogProduct = (productId: string) => {
+    updateThemeDraft((prev) => {
+      if (prev.catalog.products.length <= 1) return prev;
+      return {
+        ...prev,
+        catalog: {
+          ...prev.catalog,
+          products: prev.catalog.products.filter((product) => product.id !== productId),
+        },
+      };
+    });
+  };
+
+  const moveCatalogProduct = (productId: string, direction: "up" | "down") => {
+    updateThemeDraft((prev) => {
+      const list = [...prev.catalog.products];
+      const index = list.findIndex((product) => product.id === productId);
+      if (index < 0) return prev;
+
+      const nextIndex = direction === "up" ? index - 1 : index + 1;
+      if (nextIndex < 0 || nextIndex >= list.length) return prev;
+
+      return {
+        ...prev,
+        catalog: {
+          ...prev.catalog,
+          products: reorderList(list, index, nextIndex),
+        },
+      };
+    });
+  };
+
+  const readFileAsDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === "string") resolve(reader.result);
+        else reject(new Error("Failed to read file"));
+      };
+      reader.onerror = () => reject(reader.error || new Error("Failed to read file"));
+      reader.readAsDataURL(file);
+    });
+
+  const embedImageFromFile = async (
+    file: File,
+    apply: (dataUrl: string) => void,
+    targetLabel: string
+  ) => {
+    if (!file) return;
+
+    if (file.size > MAX_IMAGE_UPLOAD_SIZE) {
+      toast({
+        title: "Image too large",
+        description: `Each image must be <= ${Math.round(MAX_IMAGE_UPLOAD_SIZE / 1024 / 1024)}MB.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      apply(dataUrl);
+      toast({
+        title: "Image embedded",
+        description: `${targetLabel} updated successfully.`,
+      });
+    } catch (error) {
+      console.error("Failed to embed image", error);
+      toast({
+        title: "Image processing failed",
+        description: "Please try a different image.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSingleImageInput = async (
+    event: ChangeEvent<HTMLInputElement>,
+    apply: (dataUrl: string) => void,
+    targetLabel: string
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    await embedImageFromFile(file, apply, targetLabel);
+  };
+
+  const handleMultiImageInput = async (
+    event: ChangeEvent<HTMLInputElement>,
+    apply: (dataUrls: string[]) => void,
+    targetLabel: string
+  ) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (files.length === 0) return;
+
+    const validFiles = files.filter((file) => file.size <= MAX_IMAGE_UPLOAD_SIZE);
+    if (validFiles.length === 0) {
+      toast({
+        title: "No valid images",
+        description: `Please choose images <= ${Math.round(MAX_IMAGE_UPLOAD_SIZE / 1024 / 1024)}MB.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const dataUrls = await Promise.all(validFiles.map((file) => readFileAsDataUrl(file)));
+      apply(dataUrls);
+      toast({
+        title: "Images embedded",
+        description: `${targetLabel} added ${dataUrls.length} image(s).`,
+      });
+    } catch (error) {
+      console.error("Failed to embed images", error);
+      toast({
+        title: "Batch image processing failed",
+        description: "Please verify the images and try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const exportTemplate = () => {
+    if (!selectedShop) return;
+
+    const payload = {
+      format: TEMPLATE_EXPORT_FORMAT,
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      shop: {
+        id: selectedShop.id,
+        name: selectedShop.name,
+        domain: selectedShop.domain,
+      },
+      themeEnabled,
+      legacyLayout,
+      theme: themeDraft,
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${selectedShop.domain || "shop"}-theme-v2-template.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: "Template exported",
+      description: "Downloaded full theme template with data URLs.",
+    });
+  };
+
+  const importTemplateFromFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    try {
+      const rawText = await file.text();
+      const parsed = JSON.parse(rawText) as unknown;
+      const parsedObject =
+        parsed && typeof parsed === "object" && !Array.isArray(parsed)
+          ? (parsed as Record<string, unknown>)
+          : null;
+
+      const nextThemeRaw = parsedObject
+        ? parsedObject.theme || parsedObject.themeDraft || parsedObject.layout_config_v2 || parsedObject
+        : parsed;
+
+      const nextTheme = normalizeThemeV2(nextThemeRaw);
+      setThemeDraft(nextTheme);
+      setSelectedSectionId(nextTheme.home.sections[0]?.id || "");
+      setUndoStack([]);
+      setRedoStack([]);
+
+      if (parsedObject?.legacyLayout) {
+        setLegacyLayout(parseLegacyLayout(parsedObject.legacyLayout));
+      }
+
+      if (typeof parsedObject?.themeEnabled === "boolean") {
+        setThemeEnabled(parsedObject.themeEnabled);
+      }
+
+      toast({
+        title: "Template imported",
+        description: "Theme loaded. Save draft or publish when ready.",
+      });
+    } catch (error) {
+      console.error("Failed to import template", error);
+      toast({
+        title: "Template import failed",
+        description: "Invalid JSON template file.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const exportCatalogJson = () => {
+    const payload = {
+      products: themeDraft.catalog.products,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `catalog-products-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: "Catalog exported",
+      description: "Product JSON downloaded.",
+    });
+  };
+
+  const importCatalogFromFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    try {
+      const rawText = await file.text();
+      const parsed = JSON.parse(rawText) as unknown;
+      const parsedObject =
+        parsed && typeof parsed === "object" && !Array.isArray(parsed)
+          ? (parsed as Record<string, unknown>)
+          : null;
+
+      const productsInput = Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsedObject?.products)
+          ? parsedObject.products
+          : Array.isArray(parsedObject?.catalog)
+            ? parsedObject.catalog
+            : parsedObject?.catalog &&
+                typeof parsedObject.catalog === "object" &&
+                !Array.isArray(parsedObject.catalog) &&
+                Array.isArray((parsedObject.catalog as Record<string, unknown>).products)
+              ? ((parsedObject.catalog as Record<string, unknown>).products as unknown[])
+            : null;
+
+      if (!productsInput) {
+        throw new Error("Invalid products payload");
+      }
+
+      updateThemeDraft((prev) => ({
+        ...prev,
+        catalog: {
+          ...prev.catalog,
+          products: productsInput as ThemeV2["catalog"]["products"],
+        },
+      }));
+
+      toast({
+        title: "Catalog imported",
+        description: `Imported ${productsInput.length} product(s).`,
+      });
+    } catch (error) {
+      console.error("Failed to import catalog", error);
+      toast({
+        title: "Catalog import failed",
+        description: "Please use a valid catalog JSON file.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleUndo = () => {
@@ -680,7 +1112,7 @@ export const ShopDesignView = () => {
     });
   };
 
-  const deleteSection = (sectionId: string) => {
+  const requestDeleteSection = (sectionId: string) => {
     if (themeDraft.home.sections.length <= 1) {
       toast({
         title: "无法删除",
@@ -689,6 +1121,13 @@ export const ShopDesignView = () => {
       });
       return;
     }
+    setConfirmDeleteSectionId(sectionId);
+  };
+
+  const confirmDeleteSection = () => {
+    const sectionId = confirmDeleteSectionId;
+    setConfirmDeleteSectionId(null);
+    if (!sectionId) return;
     updateThemeDraft((prev) => {
       const next = prev.home.sections.filter((section) => section.id !== sectionId);
       if (selectedSectionId === sectionId) {
@@ -698,9 +1137,9 @@ export const ShopDesignView = () => {
     });
   };
 
-  const saveDraft = async () => {
+  const saveDraft = async (silent = false) => {
     if (!selectedShopId) return;
-    setSavingDraft(true);
+    if (!silent) setSavingDraft(true);
     try {
       const response = await fetch(`${API_URL}/api/admin/shops/${selectedShopId}/theme-v2/draft`, {
         method: "PUT",
@@ -713,15 +1152,38 @@ export const ShopDesignView = () => {
       }
       if (!response.ok) throw new Error("Failed to save draft");
       const data = await response.json();
-      setThemeDraft(normalizeThemeV2(data?.draft || themeDraft));
-      toast({ title: "Draft saved", description: "Theme draft is stored successfully." });
+      const saved = normalizeThemeV2(data?.draft || themeDraft);
+      draftSnapshotRef.current = JSON.stringify(saved);
+      if (!silent) {
+        setThemeDraft(saved);
+        toast({ title: "草稿已保存", description: "主题草稿已成功存储。" });
+      }
+      setLastAutoSave(new Date());
     } catch (error) {
       console.error("Failed to save draft", error);
-      toast({ title: "Error", description: "Failed to save draft.", variant: "destructive" });
+      if (!silent) {
+        toast({ title: "保存失败", description: "草稿保存失败，请重试。", variant: "destructive" });
+      }
     } finally {
-      setSavingDraft(false);
+      if (!silent) setSavingDraft(false);
     }
   };
+
+  // Auto-save: debounced save 30s after last change
+  useEffect(() => {
+    if (!autoSaveEnabled || !selectedShopId) return;
+    const currentSnapshot = JSON.stringify(themeDraft);
+    if (currentSnapshot === draftSnapshotRef.current) return;
+
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      void saveDraft(true);
+    }, 30000);
+
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [themeDraft, autoSaveEnabled, selectedShopId]);
 
   const publishTheme = async () => {
     if (!selectedShopId) return;
@@ -907,7 +1369,32 @@ export const ShopDesignView = () => {
           </Button>
           <Button
             variant="outline"
-            onClick={saveDraft}
+            onClick={exportTemplate}
+            disabled={!selectedShopId}
+            title="Export full template backup (includes image data URLs)"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            导出模板
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => templateImportInputRef.current?.click()}
+            disabled={!selectedShopId}
+            title="Import previously exported template JSON"
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            导入模板
+          </Button>
+          <input
+            ref={templateImportInputRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={(event) => void importTemplateFromFile(event)}
+          />
+          <Button
+            variant="outline"
+            onClick={() => saveDraft()}
             disabled={!selectedShopId || savingDraft || isBusy}
             title="仅保存草稿，不会立刻影响前台用户"
           >
@@ -915,7 +1402,7 @@ export const ShopDesignView = () => {
             保存草稿
           </Button>
           <Button
-            onClick={publishTheme}
+            onClick={() => setConfirmPublishOpen(true)}
             disabled={!selectedShopId || publishing || isBusy}
             title="将当前草稿发布为线上版本，前台会立即使用"
           >
@@ -1022,7 +1509,7 @@ export const ShopDesignView = () => {
                 </div>
 
                 <Tabs value={previewPage} onValueChange={(value) => setPreviewPage(value as ThemePreviewPage)}>
-                  <TabsList className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 h-auto">
+                  <TabsList className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 h-auto">
                     {PREVIEW_PAGES.map((page) => (
                       <TabsTrigger key={page.value} value={page.value}>
                         {page.label}
@@ -1574,6 +2061,30 @@ export const ShopDesignView = () => {
                         <Plus className="w-4 h-4 mr-2" />
                         富文本
                       </Button>
+                      <Button variant="outline" size="sm" onClick={() => addSection("image_carousel")}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        图片轮播
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => addSection("video_embed")}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        视频嵌入
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => addSection("testimonials")}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        客户评价
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => addSection("divider")}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        分隔符
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => addSection("countdown_timer")}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        倒计时
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => addSection("featured_collection")}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        精选集合
+                      </Button>
                     </div>
 
                     <div className="space-y-2">
@@ -1667,7 +2178,7 @@ export const ShopDesignView = () => {
                                   <Button variant="ghost" size="icon" onClick={() => duplicateSection(section.id)} title="复制">
                                     <Copy className="w-4 h-4" />
                                   </Button>
-                                  <Button variant="ghost" size="icon" onClick={() => deleteSection(section.id)} title="删除">
+                                  <Button variant="ghost" size="icon" onClick={() => requestDeleteSection(section.id)} title="删除">
                                     <Trash2 className="w-4 h-4" />
                                   </Button>
                                 </div>
@@ -1992,6 +2503,385 @@ export const ShopDesignView = () => {
                                 <SelectItem value="right">右对齐</SelectItem>
                               </SelectContent>
                             </Select>
+                          </div>
+                        </>
+                      ) : selectedSection.type === "image_carousel" ? (
+                        <>
+                          <div className="space-y-2">
+                            <Label>标题（可选）</Label>
+                            <Input
+                              value={String((selectedSection.settings as Record<string, unknown>).title || "")}
+                              onChange={(event) =>
+                                updateSection(selectedSection.id, (section) => ({
+                                  ...section,
+                                  settings: { ...(section.settings as Record<string, unknown>), title: event.target.value },
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>图片 URL 列表（每行一个）</Label>
+                            <Textarea
+                              rows={5}
+                              placeholder="https://example.com/image1.jpg&#10;https://example.com/image2.jpg"
+                              value={(Array.isArray((selectedSection.settings as Record<string, unknown>).images) ? (selectedSection.settings as Record<string, unknown>).images as string[] : []).join("\n")}
+                              onChange={(event) => {
+                                const images = event.target.value.split("\n").map((s) => s.trim()).filter(Boolean);
+                                updateSection(selectedSection.id, (section) => ({
+                                  ...section,
+                                  settings: { ...(section.settings as Record<string, unknown>), images },
+                                }));
+                              }}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <Label>自动播放</Label>
+                            <Switch
+                              checked={Boolean((selectedSection.settings as Record<string, unknown>).autoPlay !== false)}
+                              onCheckedChange={(checked) =>
+                                updateSection(selectedSection.id, (section) => ({
+                                  ...section,
+                                  settings: { ...(section.settings as Record<string, unknown>), autoPlay: checked },
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>切换间隔（秒）</Label>
+                            <Input
+                              type="number"
+                              min={2}
+                              max={15}
+                              value={Number((selectedSection.settings as Record<string, unknown>).interval) || 4}
+                              onChange={(event) =>
+                                updateSection(selectedSection.id, (section) => ({
+                                  ...section,
+                                  settings: { ...(section.settings as Record<string, unknown>), interval: Number(event.target.value) || 4 },
+                                }))
+                              }
+                            />
+                          </div>
+                        </>
+                      ) : selectedSection.type === "video_embed" ? (
+                        <>
+                          <div className="space-y-2">
+                            <Label>标题（可选）</Label>
+                            <Input
+                              value={String((selectedSection.settings as Record<string, unknown>).title || "")}
+                              onChange={(event) =>
+                                updateSection(selectedSection.id, (section) => ({
+                                  ...section,
+                                  settings: { ...(section.settings as Record<string, unknown>), title: event.target.value },
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>视频 URL</Label>
+                            <Input
+                              placeholder="YouTube / Vimeo 链接"
+                              value={String((selectedSection.settings as Record<string, unknown>).videoUrl || "")}
+                              onChange={(event) =>
+                                updateSection(selectedSection.id, (section) => ({
+                                  ...section,
+                                  settings: { ...(section.settings as Record<string, unknown>), videoUrl: event.target.value },
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>宽高比</Label>
+                            <Select
+                              value={String((selectedSection.settings as Record<string, unknown>).aspectRatio || "16:9")}
+                              onValueChange={(value) =>
+                                updateSection(selectedSection.id, (section) => ({
+                                  ...section,
+                                  settings: { ...(section.settings as Record<string, unknown>), aspectRatio: value },
+                                }))
+                              }
+                            >
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="16:9">16:9</SelectItem>
+                                <SelectItem value="4:3">4:3</SelectItem>
+                                <SelectItem value="1:1">1:1</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>视频说明（可选）</Label>
+                            <Input
+                              value={String((selectedSection.settings as Record<string, unknown>).caption || "")}
+                              onChange={(event) =>
+                                updateSection(selectedSection.id, (section) => ({
+                                  ...section,
+                                  settings: { ...(section.settings as Record<string, unknown>), caption: event.target.value },
+                                }))
+                              }
+                            />
+                          </div>
+                        </>
+                      ) : selectedSection.type === "testimonials" ? (
+                        <>
+                          <div className="space-y-2">
+                            <Label>标题</Label>
+                            <Input
+                              value={String((selectedSection.settings as Record<string, unknown>).title || "")}
+                              onChange={(event) =>
+                                updateSection(selectedSection.id, (section) => ({
+                                  ...section,
+                                  settings: { ...(section.settings as Record<string, unknown>), title: event.target.value },
+                                }))
+                              }
+                            />
+                          </div>
+                          <Separator />
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <Label>评价列表</Label>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  updateSection(selectedSection.id, (section) => {
+                                    const items = Array.isArray((section.settings as Record<string, unknown>).items)
+                                      ? [...((section.settings as Record<string, unknown>).items as { author: string; content: string; rating: number }[])]
+                                      : [];
+                                    items.push({ author: "New Customer", content: "Great product!", rating: 5 });
+                                    return { ...section, settings: { ...(section.settings as Record<string, unknown>), items } };
+                                  })
+                                }
+                              >
+                                <Plus className="w-3 h-3 mr-1" />
+                                添加
+                              </Button>
+                            </div>
+                            {(Array.isArray((selectedSection.settings as Record<string, unknown>).items)
+                              ? ((selectedSection.settings as Record<string, unknown>).items as { author: string; content: string; rating: number }[])
+                              : []
+                            ).map((item, idx) => (
+                              <div key={idx} className="border rounded-md p-3 space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs text-muted-foreground">#{idx + 1}</span>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={() =>
+                                      updateSection(selectedSection.id, (section) => {
+                                        const items = [...((section.settings as Record<string, unknown>).items as { author: string; content: string; rating: number }[])];
+                                        items.splice(idx, 1);
+                                        return { ...section, settings: { ...(section.settings as Record<string, unknown>), items } };
+                                      })
+                                    }
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                                <Input
+                                  placeholder="作者"
+                                  value={item.author}
+                                  onChange={(event) =>
+                                    updateSection(selectedSection.id, (section) => {
+                                      const items = [...((section.settings as Record<string, unknown>).items as { author: string; content: string; rating: number }[])];
+                                      items[idx] = { ...items[idx], author: event.target.value };
+                                      return { ...section, settings: { ...(section.settings as Record<string, unknown>), items } };
+                                    })
+                                  }
+                                />
+                                <Textarea
+                                  rows={2}
+                                  placeholder="评价内容"
+                                  value={item.content}
+                                  onChange={(event) =>
+                                    updateSection(selectedSection.id, (section) => {
+                                      const items = [...((section.settings as Record<string, unknown>).items as { author: string; content: string; rating: number }[])];
+                                      items[idx] = { ...items[idx], content: event.target.value };
+                                      return { ...section, settings: { ...(section.settings as Record<string, unknown>), items } };
+                                    })
+                                  }
+                                />
+                                <Select
+                                  value={String(item.rating)}
+                                  onValueChange={(value) =>
+                                    updateSection(selectedSection.id, (section) => {
+                                      const items = [...((section.settings as Record<string, unknown>).items as { author: string; content: string; rating: number }[])];
+                                      items[idx] = { ...items[idx], rating: Number(value) };
+                                      return { ...section, settings: { ...(section.settings as Record<string, unknown>), items } };
+                                    })
+                                  }
+                                >
+                                  <SelectTrigger><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {[1, 2, 3, 4, 5].map((r) => (
+                                      <SelectItem key={r} value={String(r)}>{"★".repeat(r)}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      ) : selectedSection.type === "divider" ? (
+                        <>
+                          <div className="space-y-2">
+                            <Label>样式</Label>
+                            <Select
+                              value={String((selectedSection.settings as Record<string, unknown>).style || "line")}
+                              onValueChange={(value) =>
+                                updateSection(selectedSection.id, (section) => ({
+                                  ...section,
+                                  settings: { ...(section.settings as Record<string, unknown>), style: value },
+                                }))
+                              }
+                            >
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="line">线条</SelectItem>
+                                <SelectItem value="space">空白间距</SelectItem>
+                                <SelectItem value="dots">圆点</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>高度 (px)</Label>
+                            <Input
+                              type="number"
+                              min={1}
+                              max={120}
+                              value={Number((selectedSection.settings as Record<string, unknown>).height) || 1}
+                              onChange={(event) =>
+                                updateSection(selectedSection.id, (section) => ({
+                                  ...section,
+                                  settings: { ...(section.settings as Record<string, unknown>), height: Number(event.target.value) || 1 },
+                                }))
+                              }
+                            />
+                          </div>
+                        </>
+                      ) : selectedSection.type === "countdown_timer" ? (
+                        <>
+                          <div className="space-y-2">
+                            <Label>标题</Label>
+                            <Input
+                              value={String((selectedSection.settings as Record<string, unknown>).title || "")}
+                              onChange={(event) =>
+                                updateSection(selectedSection.id, (section) => ({
+                                  ...section,
+                                  settings: { ...(section.settings as Record<string, unknown>), title: event.target.value },
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>副标题</Label>
+                            <Input
+                              value={String((selectedSection.settings as Record<string, unknown>).subtitle || "")}
+                              onChange={(event) =>
+                                updateSection(selectedSection.id, (section) => ({
+                                  ...section,
+                                  settings: { ...(section.settings as Record<string, unknown>), subtitle: event.target.value },
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>结束日期</Label>
+                            <Input
+                              type="datetime-local"
+                              value={String((selectedSection.settings as Record<string, unknown>).endDate || "")}
+                              onChange={(event) =>
+                                updateSection(selectedSection.id, (section) => ({
+                                  ...section,
+                                  settings: { ...(section.settings as Record<string, unknown>), endDate: event.target.value },
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>按钮文字</Label>
+                            <Input
+                              value={String((selectedSection.settings as Record<string, unknown>).ctaText || "")}
+                              onChange={(event) =>
+                                updateSection(selectedSection.id, (section) => ({
+                                  ...section,
+                                  settings: { ...(section.settings as Record<string, unknown>), ctaText: event.target.value },
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>按钮链接</Label>
+                            <Input
+                              value={String((selectedSection.settings as Record<string, unknown>).ctaLink || "")}
+                              onChange={(event) =>
+                                updateSection(selectedSection.id, (section) => ({
+                                  ...section,
+                                  settings: { ...(section.settings as Record<string, unknown>), ctaLink: event.target.value },
+                                }))
+                              }
+                            />
+                          </div>
+                        </>
+                      ) : selectedSection.type === "featured_collection" ? (
+                        <>
+                          <div className="space-y-2">
+                            <Label>标题</Label>
+                            <Input
+                              value={String((selectedSection.settings as Record<string, unknown>).title || "")}
+                              onChange={(event) =>
+                                updateSection(selectedSection.id, (section) => ({
+                                  ...section,
+                                  settings: { ...(section.settings as Record<string, unknown>), title: event.target.value },
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>副标题</Label>
+                            <Input
+                              value={String((selectedSection.settings as Record<string, unknown>).subtitle || "")}
+                              onChange={(event) =>
+                                updateSection(selectedSection.id, (section) => ({
+                                  ...section,
+                                  settings: { ...(section.settings as Record<string, unknown>), subtitle: event.target.value },
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>列数</Label>
+                            <Select
+                              value={String((selectedSection.settings as Record<string, unknown>).columns || 4)}
+                              onValueChange={(value) =>
+                                updateSection(selectedSection.id, (section) => ({
+                                  ...section,
+                                  settings: { ...(section.settings as Record<string, unknown>), columns: Number(value) },
+                                }))
+                              }
+                            >
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {[2, 3, 4, 5, 6].map((c) => (
+                                  <SelectItem key={c} value={String(c)}>{c} 列</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>商品 ID 列表（每行一个，留空则自动选取）</Label>
+                            <Textarea
+                              rows={4}
+                              placeholder="prod_1&#10;prod_2&#10;prod_3"
+                              value={(Array.isArray((selectedSection.settings as Record<string, unknown>).productIds) ? (selectedSection.settings as Record<string, unknown>).productIds as string[] : []).join("\n")}
+                              onChange={(event) => {
+                                const productIds = event.target.value.split("\n").map((s) => s.trim()).filter(Boolean);
+                                updateSection(selectedSection.id, (section) => ({
+                                  ...section,
+                                  settings: { ...(section.settings as Record<string, unknown>), productIds },
+                                }));
+                              }}
+                            />
                           </div>
                         </>
                       ) : null}
@@ -2374,11 +3264,27 @@ export const ShopDesignView = () => {
                           placeholder="页面副标题"
                         />
                       </div>
-                      <Input
-                        value={themeDraft.pages.coupon.heroImage}
-                        onChange={(event) => updateCouponPage({ heroImage: event.target.value })}
-                        placeholder="顶部图片 URL（可选）"
-                      />
+                      <div className="space-y-2">
+                        <Input
+                          value={themeDraft.pages.coupon.heroImage}
+                          onChange={(event) => updateCouponPage({ heroImage: event.target.value })}
+                          placeholder="顶部图片 URL（可选）"
+                        />
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          onChange={(event) =>
+                            void handleSingleImageInput(
+                              event,
+                              (dataUrl) => updateCouponPage({ heroImage: dataUrl }),
+                              "Coupon hero image"
+                            )
+                          }
+                        />
+                        <div className="text-xs text-muted-foreground">
+                          上传后将转换为 data URL 并随模板一起导出。
+                        </div>
+                      </div>
 
                       <div className="grid md:grid-cols-2 gap-3">
                         <Input
@@ -2459,6 +3365,254 @@ export const ShopDesignView = () => {
                         placeholder="底部帮助文案（可选）"
                         rows={2}
                       />
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-3">
+                      <h4 className="font-medium">PIN 验证页（PIN Verification）</h4>
+                      <div className="grid md:grid-cols-2 gap-3">
+                        <Input
+                          value={themeDraft.pages.pin.title}
+                          onChange={(event) => updatePinPage({ title: event.target.value })}
+                          placeholder="页面标题"
+                        />
+                        <Input
+                          value={themeDraft.pages.pin.subtitle}
+                          onChange={(event) => updatePinPage({ subtitle: event.target.value })}
+                          placeholder="页面副标题"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Input
+                          value={themeDraft.pages.pin.heroImage}
+                          onChange={(event) => updatePinPage({ heroImage: event.target.value })}
+                          placeholder="顶部图片 URL（可选）"
+                        />
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          onChange={(event) =>
+                            void handleSingleImageInput(
+                              event,
+                              (dataUrl) => updatePinPage({ heroImage: dataUrl }),
+                              "PIN hero image"
+                            )
+                          }
+                        />
+                        <div className="text-xs text-muted-foreground">
+                          上传后将转换为 data URL 并随模板一起导出。
+                        </div>
+                      </div>
+                      <div className="grid md:grid-cols-2 gap-3">
+                        <Input
+                          value={themeDraft.pages.pin.codeLabel}
+                          onChange={(event) => updatePinPage({ codeLabel: event.target.value })}
+                          placeholder="PIN 字段名"
+                        />
+                        <Input
+                          value={themeDraft.pages.pin.codePlaceholder}
+                          onChange={(event) => updatePinPage({ codePlaceholder: event.target.value })}
+                          placeholder="PIN 占位文案"
+                        />
+                        <Input
+                          value={themeDraft.pages.pin.submitText}
+                          onChange={(event) => updatePinPage({ submitText: event.target.value })}
+                          placeholder="提交按钮文案"
+                        />
+                        <Input
+                          value={themeDraft.pages.pin.submittingText}
+                          onChange={(event) => updatePinPage({ submittingText: event.target.value })}
+                          placeholder="提交中按钮文案"
+                        />
+                        <Input
+                          value={themeDraft.pages.pin.loadingTitle}
+                          onChange={(event) => updatePinPage({ loadingTitle: event.target.value })}
+                          placeholder="加载标题"
+                        />
+                      </div>
+                      <Textarea
+                        value={themeDraft.pages.pin.loadingDescription}
+                        onChange={(event) => updatePinPage({ loadingDescription: event.target.value })}
+                        placeholder="加载描述"
+                        rows={2}
+                      />
+                      <Textarea
+                        value={themeDraft.pages.pin.invalidCodeMessage}
+                        onChange={(event) => updatePinPage({ invalidCodeMessage: event.target.value })}
+                        placeholder="无效 PIN 提示文案"
+                        rows={2}
+                      />
+                      <Textarea
+                        value={themeDraft.pages.pin.rejectedMessage}
+                        onChange={(event) => updatePinPage({ rejectedMessage: event.target.value })}
+                        placeholder="校验失败提示文案"
+                        rows={2}
+                      />
+                      <Textarea
+                        value={themeDraft.pages.pin.helpText}
+                        onChange={(event) => updatePinPage({ helpText: event.target.value })}
+                        placeholder="底部帮助文案（可选）"
+                        rows={2}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>商品目录（Theme v2）</CardTitle>
+                    <CardDescription>可编辑商品文案、主图、图库，并支持 JSON 导入导出。</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" onClick={exportCatalogJson}>
+                        <Download className="w-4 h-4 mr-2" />
+                        导出商品
+                      </Button>
+                      <Button variant="outline" onClick={() => productImportInputRef.current?.click()}>
+                        <Upload className="w-4 h-4 mr-2" />
+                        导入商品
+                      </Button>
+                      <Button onClick={addCatalogProduct}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        新增商品
+                      </Button>
+                    </div>
+                    <input
+                      ref={productImportInputRef}
+                      type="file"
+                      accept=".json,application/json"
+                      className="hidden"
+                      onChange={(event) => void importCatalogFromFile(event)}
+                    />
+                    <div className="space-y-4">
+                      {themeDraft.catalog.products.map((product, index) => (
+                        <div key={product.id} className="border rounded-md p-3 space-y-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <Badge variant="outline">{product.id}</Badge>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                onClick={() => moveCatalogProduct(product.id, "up")}
+                                disabled={index === 0}
+                              >
+                                <ArrowUp className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                onClick={() => moveCatalogProduct(product.id, "down")}
+                                disabled={index === themeDraft.catalog.products.length - 1}
+                              >
+                                <ArrowDown className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => removeCatalogProduct(product.id)}
+                                disabled={themeDraft.catalog.products.length <= 1}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="grid md:grid-cols-3 gap-3">
+                            <Input
+                              value={product.title}
+                              onChange={(event) => updateCatalogProduct(product.id, { title: event.target.value })}
+                              placeholder="商品标题"
+                            />
+                            <Input
+                              value={product.category}
+                              onChange={(event) => updateCatalogProduct(product.id, { category: event.target.value })}
+                              placeholder="分类"
+                            />
+                            <Input
+                              value={product.displayPrice}
+                              onChange={(event) => updateCatalogProduct(product.id, { displayPrice: event.target.value })}
+                              placeholder="显示价格（如 $29.99）"
+                            />
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={product.price}
+                              onChange={(event) => updateCatalogProductNumber(product.id, "price", event.target.value)}
+                              placeholder="数字价格"
+                            />
+                            <Input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              max="5"
+                              value={product.rating}
+                              onChange={(event) => updateCatalogProductNumber(product.id, "rating", event.target.value)}
+                              placeholder="评分（0-5）"
+                            />
+                            <Input
+                              type="number"
+                              step="1"
+                              min="0"
+                              value={product.reviews}
+                              onChange={(event) => updateCatalogProductNumber(product.id, "reviews", event.target.value)}
+                              placeholder="评论数"
+                            />
+                          </div>
+                          <Textarea
+                            value={product.description}
+                            onChange={(event) => updateCatalogProduct(product.id, { description: event.target.value })}
+                            placeholder="商品描述"
+                            rows={2}
+                          />
+                          <div className="space-y-2">
+                            <Input
+                              value={product.image}
+                              onChange={(event) => setCatalogProductCoverImage(product.id, event.target.value)}
+                              placeholder="封面图 URL"
+                            />
+                            <Input
+                              type="file"
+                              accept="image/*"
+                              onChange={(event) =>
+                                void handleSingleImageInput(
+                                  event,
+                                  (dataUrl) => setCatalogProductCoverImage(product.id, dataUrl),
+                                  `${product.title} cover`
+                                )
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Textarea
+                              value={product.images.join("\n")}
+                              onChange={(event) => setCatalogProductImagesFromText(product.id, event.target.value)}
+                              placeholder="每行一个图库图片 URL"
+                              rows={3}
+                            />
+                            <Input
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              onChange={(event) =>
+                                void handleMultiImageInput(
+                                  event,
+                                  (dataUrls) =>
+                                    updateCatalogProduct(product.id, {
+                                      images: [...product.images, ...dataUrls],
+                                      image: product.image || dataUrls[0] || "",
+                                    }),
+                                  `${product.title} gallery`
+                                )
+                              }
+                            />
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </CardContent>
                 </Card>
@@ -2555,7 +3709,7 @@ export const ShopDesignView = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => rollbackVersion(version.id)}
+                            onClick={() => { setConfirmRollbackVersionId(version.id); setConfirmRollbackOpen(true); }}
                             disabled={publishing}
                           >
                             <RotateCcw className="w-4 h-4 mr-2" />
@@ -2793,6 +3947,75 @@ export const ShopDesignView = () => {
           </TabsContent>
         </Tabs>
       ) : null}
+
+      {/* Auto-save indicator */}
+      {autoSaveEnabled && lastAutoSave && (
+        <div className="fixed bottom-4 right-4 bg-muted/80 backdrop-blur text-xs text-muted-foreground px-3 py-1.5 rounded-full shadow-sm z-50">
+          自动保存: {lastAutoSave.toLocaleTimeString()}
+        </div>
+      )}
+
+      {/* Confirmation: Publish */}
+      <AlertDialog open={confirmPublishOpen} onOpenChange={setConfirmPublishOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认发布</AlertDialogTitle>
+            <AlertDialogDescription>
+              发布后当前草稿将成为线上版本，前台用户会立即看到更改。确定要发布吗？
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setConfirmPublishOpen(false); void publishTheme(); }}>
+              确认发布
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirmation: Rollback */}
+      <AlertDialog open={confirmRollbackOpen} onOpenChange={setConfirmRollbackOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认回滚</AlertDialogTitle>
+            <AlertDialogDescription>
+              回滚将恢复到选定的历史版本，并立即发布为新版本。当前草稿中未保存的更改将丢失。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmRollbackVersionId(null)}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmRollbackOpen(false);
+                if (confirmRollbackVersionId != null) {
+                  void rollbackVersion(confirmRollbackVersionId);
+                  setConfirmRollbackVersionId(null);
+                }
+              }}
+            >
+              确认回滚
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirmation: Delete Section */}
+      <AlertDialog open={confirmDeleteSectionId != null} onOpenChange={(open) => { if (!open) setConfirmDeleteSectionId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除模块</AlertDialogTitle>
+            <AlertDialogDescription>
+              删除后该模块的配置将丢失（可通过撤销恢复）。确定要删除吗？
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteSection}>
+              确认删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

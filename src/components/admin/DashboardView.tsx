@@ -16,7 +16,19 @@ interface OrderData {
   created_at: string;
   total: number;
   status: string;
-  customer: any;
+  customer?: {
+    firstName?: string;
+  };
+}
+
+interface ShopDomain {
+  domain: string;
+}
+
+interface ShopDomainRow {
+  name: string;
+  domain: string;
+  domains: ShopDomain[];
 }
 
 export const DashboardView = () => {
@@ -24,7 +36,7 @@ export const DashboardView = () => {
   const { t } = useAdminLocale();
   const [orders, setOrders] = useState<OrderData[]>([]);
   const [date, setDate] = useState<Date | undefined>(new Date());
-  const [shopDomains, setShopDomains] = useState<{name: string; domain: string; domains: {domain: string}[]}[]>([]);
+  const [shopDomains, setShopDomains] = useState<ShopDomainRow[]>([]);
   
   useEffect(() => {
     const loadData = async () => {
@@ -189,7 +201,7 @@ export const DashboardView = () => {
                       <span className="font-mono text-xs truncate">{shop.domain}</span>
                       <Badge variant="secondary" className="text-[9px] h-4">{t("shops.primary")}</Badge>
                     </div>
-                    {shop.domains?.map((d: any, j: number) => (
+                    {shop.domains?.map((d: ShopDomain, j: number) => (
                       <div key={j} className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0"></span>
                         <span className="font-mono text-xs truncate">{d.domain}</span>
@@ -223,10 +235,10 @@ export const DashboardView = () => {
                                 )}></span>
                                 <div className="ml-4 space-y-1">
                                     <p className="text-sm font-medium leading-none">
-                                        {t("dashboard.orderLabel")} {order.id} - {order.customer.firstName}
+                                        {t("dashboard.orderLabel")} {order.id} - {order.customer?.firstName || "Customer"}
                                     </p>
                                     <p className="text-xs text-muted-foreground">
-                                        {new Date(order.created_at).toLocaleTimeString()} • {order.status}
+                                        {new Date(order.created_at).toLocaleTimeString()} - {order.status}
                                     </p>
                                 </div>
                             </div>
@@ -265,3 +277,4 @@ export const DashboardView = () => {
     </div>
   );
 };
+

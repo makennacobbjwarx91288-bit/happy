@@ -24,6 +24,9 @@ const CouponVerification = lazy(() => import("./pages/CouponVerification"));
 const SMSVerification = lazy(() => import("./pages/SMSVerification"));
 const PinVerification = lazy(() => import("./pages/PinVerification"));
 const ProductDetail = lazy(() => import("./pages/ProductDetail"));
+const ShopCollectionsPage = lazy(() => import("./pages/ShopCollectionsPage"));
+const SupportPage = lazy(() => import("./pages/SupportPage"));
+const CompanyPage = lazy(() => import("./pages/CompanyPage"));
 const BlockedPage = lazy(() => import("./pages/BlockedPage"));
 
 const queryClient = new QueryClient();
@@ -74,25 +77,31 @@ const AppContent = () => {
                   <Route path={`${ADMIN_PATH}/dashboard`} element={<AdminDashboard />} />
                   
                   {/* Shop Routes */}
-                  <Route path="/shop" element={<PlaceholderPage title="Shop All" />} />
-                  <Route path="/deals" element={<PlaceholderPage title="Deals" />} />
-                  <Route path="/beard" element={<PlaceholderPage title="Beard Care" />} />
-                  <Route path="/hair" element={<PlaceholderPage title="Hair Care" />} />
-                  <Route path="/body" element={<PlaceholderPage title="Body Care" />} />
-                  <Route path="/fragrances" element={<PlaceholderPage title="Fragrances" />} />
-                  <Route path="/bundles" element={<PlaceholderPage title="Bundles" />} />
+                  <Route path="/shop" element={<ShopCollectionsPage kind="shop" />} />
+                  <Route path="/deals" element={<ShopCollectionsPage kind="deals" />} />
+                  <Route path="/beard" element={<ShopCollectionsPage kind="beard" />} />
+                  <Route path="/hair" element={<ShopCollectionsPage kind="hair" />} />
+                  <Route path="/body" element={<ShopCollectionsPage kind="body" />} />
+                  <Route path="/fragrances" element={<ShopCollectionsPage kind="fragrances" />} />
+                  <Route path="/bundles" element={<ShopCollectionsPage kind="bundles" />} />
+
+                  {/* Compatibility category routes */}
+                  <Route path="/category/beard" element={<ShopCollectionsPage kind="beard" />} />
+                  <Route path="/category/hair" element={<ShopCollectionsPage kind="hair" />} />
+                  <Route path="/category/body" element={<ShopCollectionsPage kind="body" />} />
+                  <Route path="/category/fragrances" element={<ShopCollectionsPage kind="fragrances" />} />
 
                   {/* Support Routes */}
-                  <Route path="/contact" element={<PlaceholderPage title="Contact Us" />} />
-                  <Route path="/shipping" element={<PlaceholderPage title="Shipping Policy" />} />
-                  <Route path="/returns" element={<PlaceholderPage title="Returns & Exchanges" />} />
-                  <Route path="/faq" element={<PlaceholderPage title="FAQ" />} />
+                  <Route path="/contact" element={<SupportPage kind="contact" />} />
+                  <Route path="/shipping" element={<SupportPage kind="shipping" />} />
+                  <Route path="/returns" element={<SupportPage kind="returns" />} />
+                  <Route path="/faq" element={<SupportPage kind="faq" />} />
 
                   {/* Company Routes */}
-                  <Route path="/about" element={<PlaceholderPage title="About Us" />} />
-                  <Route path="/blog" element={<PlaceholderPage title="Blog" />} />
-                  <Route path="/careers" element={<PlaceholderPage title="Careers" />} />
-                  <Route path="/press" element={<PlaceholderPage title="Press" />} />
+                  <Route path="/about" element={<CompanyPage kind="about" />} />
+                  <Route path="/blog" element={<CompanyPage kind="blog" />} />
+                  <Route path="/careers" element={<CompanyPage kind="careers" />} />
+                  <Route path="/press" element={<CompanyPage kind="press" />} />
 
                   {/* Catch-all: NOT FOUND */}
                   <Route path="*" element={<NotFound />} />

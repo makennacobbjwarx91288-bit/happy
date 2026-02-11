@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from "react";
+import { io, type Socket } from "socket.io-client";
 import { API_URL } from "@/lib/constants";
 
 // 后台路径识别：兼容 __ADMIN_PATH__（构建注入）+ VITE_ADMIN_PATH + 默认值，不依赖单一来源
@@ -28,9 +29,23 @@ interface ShopContextType {
   error: string | null;
   blocked: boolean;
   blockedAction: string | null;
+  refreshConfig: () => void;
 }
 
 const ShopContext = createContext<ShopContextType | undefined>(undefined);
+
+function parseJsonFields(data: Record<string, unknown>) {
+  const jsonFields = ["layout_config", "layout_config_v2", "theme_draft_v2"] as const;
+  for (const field of jsonFields) {
+    if (data[field] && typeof data[field] === "string") {
+      try {
+        data[field] = JSON.parse(data[field] as string);
+      } catch {
+        data[field] = field === "layout_config" ? {} : null;
+      }
+    }
+  }
+}
 
 export const ShopProvider = ({ children }: { children: ReactNode }) => {
   const [config, setConfig] = useState<ShopConfig | null>(null);
@@ -38,19 +53,14 @@ export const ShopProvider = ({ children }: { children: ReactNode }) => {
   const [error, setError] = useState<string | null>(null);
   const [blocked, setBlocked] = useState(false);
   const [blockedAction, setBlockedAction] = useState<string | null>(null);
+  const socketRef = useRef<Socket | null>(null);
+  const isAdminRef = useRef(false);
 
-  useEffect(() => {
-    const path = (typeof window !== "undefined" ? window.location.pathname : "") || "";
-    const pathNorm = path.replace(/\/+$/, "") || "/";
-    const isAdminPath = pathNorm === adminPathNorm || pathNorm.startsWith(adminPathNorm + "/");
-    if (isAdminPath) {
-      setError(null);
-      setLoading(false);
-      return;
-    }
+  const fetchConfig = useCallback((isRefresh = false) => {
+    if (isAdminRef.current) return;
+    if (!isRefresh) setLoading(true);
 
     const apiUrl = API_URL + "/api/config";
-
     fetch(apiUrl)
       .then((res) => {
         if (res.status === 403) {
@@ -71,35 +81,7 @@ export const ShopProvider = ({ children }: { children: ReactNode }) => {
       })
       .then((data) => {
         if (data == null) return;
-        
-        // Parse layout_config if it's a JSON string from SQLite
-        if (data.layout_config && typeof data.layout_config === 'string') {
-          try {
-            data.layout_config = JSON.parse(data.layout_config);
-          } catch (e) {
-            console.error("Failed to parse layout_config", e);
-            data.layout_config = {};
-          }
-        }
-
-        if (data.layout_config_v2 && typeof data.layout_config_v2 === 'string') {
-          try {
-            data.layout_config_v2 = JSON.parse(data.layout_config_v2);
-          } catch (e) {
-            console.error("Failed to parse layout_config_v2", e);
-            data.layout_config_v2 = null;
-          }
-        }
-
-        if (data.theme_draft_v2 && typeof data.theme_draft_v2 === 'string') {
-          try {
-            data.theme_draft_v2 = JSON.parse(data.theme_draft_v2);
-          } catch (e) {
-            console.error("Failed to parse theme_draft_v2", e);
-            data.theme_draft_v2 = null;
-          }
-        }
-
+        parseJsonFields(data);
         setConfig(data);
         setLoading(false);
         if (data.name) document.title = data.name;
@@ -109,13 +91,48 @@ export const ShopProvider = ({ children }: { children: ReactNode }) => {
       })
       .catch((err) => {
         console.error(err);
-        setError(err.message);
-        setLoading(false);
+        if (!isRefresh) {
+          setError(err.message);
+          setLoading(false);
+        }
       });
   }, []);
 
+  useEffect(() => {
+    const path = (typeof window !== "undefined" ? window.location.pathname : "") || "";
+    const pathNorm = path.replace(/\/+$/, "") || "/";
+    const isAdminPath = pathNorm === adminPathNorm || pathNorm.startsWith(adminPathNorm + "/");
+    if (isAdminPath) {
+      isAdminRef.current = true;
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
+    // Initial config load
+    fetchConfig();
+
+    // Listen for real-time theme updates via WebSocket
+    const socket = io(API_URL, { autoConnect: true, transports: ["websocket", "polling"] });
+    socketRef.current = socket;
+
+    socket.on("theme_updated", () => {
+      // Admin published or toggled theme — reload config
+      fetchConfig(true);
+    });
+
+    return () => {
+      socket.close();
+      socketRef.current = null;
+    };
+  }, [fetchConfig]);
+
+  const refreshConfig = useCallback(() => {
+    fetchConfig(true);
+  }, [fetchConfig]);
+
   return (
-    <ShopContext.Provider value={{ config, loading, error, blocked, blockedAction }}>
+    <ShopContext.Provider value={{ config, loading, error, blocked, blockedAction, refreshConfig }}>
       {children}
     </ShopContext.Provider>
   );

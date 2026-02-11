@@ -15,9 +15,9 @@ const Checkout = () => {
   const { cart, totalPrice } = useCart();
   const { updateLiveData, setCartTotal } = useRealtime();
   const navigate = useNavigate();
-  const { config } = useShop();
+  const { config, loading: configLoading } = useShop();
 
-  const activeTheme = getActiveThemeV2(config as unknown as Record<string, unknown>);
+  const activeTheme = configLoading ? null : getActiveThemeV2(config as unknown as Record<string, unknown>);
   const checkoutPage = activeTheme?.pages.checkout;
 
   const pageTitle = checkoutPage?.title || "Checkout";
@@ -108,19 +108,19 @@ const Checkout = () => {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Header />
-      <main className="flex-1 container mx-auto px-6 py-12">
+      <main className="flex-1 container mx-auto px-4 sm:px-6 py-8 sm:py-12">
         {heroImage ? (
           <div className="h-40 md:h-52 rounded-md border bg-muted/20 overflow-hidden mb-8">
             <div className="w-full h-full bg-cover bg-center" style={{ backgroundImage: `url(${heroImage})` }} />
           </div>
         ) : null}
 
-        <div className="text-center mb-8 space-y-2">
+        <div className="text-center mb-6 sm:mb-8 space-y-2">
           <h1 className="font-serif text-3xl md:text-4xl">{pageTitle}</h1>
           <p className="text-muted-foreground">{pageSubtitle}</p>
         </div>
         
-        <div className="grid lg:grid-cols-2 gap-12 max-w-6xl mx-auto">
+        <div className="grid gap-6 lg:gap-12 max-w-6xl mx-auto lg:grid-cols-2">
           {/* Shipping Form */}
           <div>
             <Card>
@@ -141,7 +141,7 @@ const Checkout = () => {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="firstName">{firstNameLabel}</Label>
                       <Input 
@@ -176,7 +176,7 @@ const Checkout = () => {
                     />
                   </div>
 
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="space-y-2 col-span-1">
                       <Label htmlFor="city">{cityLabel}</Label>
                       <Input 
@@ -240,7 +240,7 @@ const Checkout = () => {
 
           {/* Order Summary */}
           <div>
-            <Card className="bg-secondary/20 sticky top-24">
+            <Card className="bg-secondary/20 lg:sticky lg:top-24">
               <CardHeader>
                 <CardTitle>{summaryTitle}</CardTitle>
               </CardHeader>

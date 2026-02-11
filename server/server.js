@@ -36,7 +36,7 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Admin-Token'],
 };
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '512kb' }));
+app.use(express.json({ limit: '10mb' }));
 
 // Helmet: security headers + CSP. On HTTP (no HTTPS) skip COOP so browser does not warn "untrustworthy origin"
 // 1) 通用 helmet（不做 HSTS、不做 upgrade-insecure-requests）
@@ -308,6 +308,105 @@ const DEFAULT_SOCIAL_LINKS = [
   { name: 'Instagram', href: '#' },
   { name: 'YouTube', href: '#' },
 ];
+const MAX_EMBEDDED_URL_LENGTH = 200000;
+const DEFAULT_THEME_PRODUCTS = [
+  {
+    id: 'prod_1',
+    image: '/placeholder.svg',
+    images: ['/placeholder.svg', '/placeholder.svg', '/placeholder.svg', '/placeholder.svg'],
+    title: 'Bold Fortune Utility Oil',
+    price: 29,
+    displayPrice: '$29-$42',
+    description: 'Beard Oil / Hair Oil / Face Oil',
+    category: 'Beard',
+    reviews: 2453,
+    rating: 4.8,
+  },
+  {
+    id: 'prod_2',
+    image: '/placeholder.svg',
+    images: ['/placeholder.svg'],
+    title: 'Utility Deodorant',
+    price: 24,
+    displayPrice: '$24-$27',
+    description: 'Natural Aluminum-Free Deodorant',
+    category: 'Body',
+    reviews: 892,
+    rating: 4.7,
+  },
+  {
+    id: 'prod_3',
+    image: '/placeholder.svg',
+    images: ['/placeholder.svg'],
+    title: "Men's Cologne",
+    price: 45,
+    displayPrice: '$45-$50',
+    description: 'Alcohol-free Eau de Parfum',
+    category: 'Fragrances',
+    reviews: 431,
+    rating: 4.9,
+  },
+  {
+    id: 'prod_4',
+    image: '/placeholder.svg',
+    images: ['/placeholder.svg'],
+    title: 'Beard Balm',
+    price: 25,
+    displayPrice: '$25-$35',
+    description: 'Styling Balm / Conditioner',
+    category: 'Beard',
+    reviews: 1205,
+    rating: 4.6,
+  },
+  {
+    id: 'prod_5',
+    image: '/placeholder.svg',
+    images: ['/placeholder.svg'],
+    title: 'Utility Bar Soap',
+    price: 15,
+    displayPrice: '$15',
+    description: 'Face / Body / Hair Wash',
+    category: 'Body',
+    reviews: 356,
+    rating: 4.5,
+  },
+  {
+    id: 'prod_6',
+    image: '/placeholder.svg',
+    images: ['/placeholder.svg'],
+    title: 'Sea Salt Spray',
+    price: 22,
+    displayPrice: '$22',
+    description: 'Texturizing Hair Spray',
+    category: 'Hair',
+    reviews: 678,
+    rating: 4.7,
+  },
+  {
+    id: 'prod_7',
+    image: '/placeholder.svg',
+    images: ['/placeholder.svg'],
+    title: 'Mustache Wax',
+    price: 18,
+    displayPrice: '$18',
+    description: 'High Hold Styling Wax',
+    category: 'Beard',
+    reviews: 189,
+    rating: 4.4,
+  },
+  {
+    id: 'prod_8',
+    image: '/placeholder.svg',
+    images: ['/placeholder.svg'],
+    title: 'Beard Wash',
+    price: 27,
+    displayPrice: '$27',
+    description: 'Gentle Beard Cleanser',
+    category: 'Beard',
+    reviews: 942,
+    rating: 4.8,
+  },
+];
 
 function safeJsonParse(raw, fallback) {
   if (raw == null || raw === '') return fallback;
@@ -403,7 +502,7 @@ function normalizeMediaLibrary(raw) {
     if (!isObject(item)) continue;
     const id = asText(item.id, `asset-${Date.now()}-${out.length + 1}`, 120).replace(/[^\w-]/g, '-');
     const name = asText(item.name, '', 60);
-    const url = asText(item.url, '', 600);
+    const url = asText(item.url, '', MAX_EMBEDDED_URL_LENGTH);
     const typeRaw = asText(item.type, 'image', 10).toLowerCase();
     const type = typeRaw === 'video' || typeRaw === 'file' ? typeRaw : 'image';
     if (!name || !url) continue;
@@ -413,6 +512,49 @@ function normalizeMediaLibrary(raw) {
     if (out.length >= 80) break;
   }
   return out;
+}
+
+function normalizeCatalogProducts(raw, fallback) {
+  const source = Array.isArray(raw) ? raw : [];
+  const out = [];
+  const seen = new Set();
+
+  for (const item of source) {
+    if (!isObject(item)) continue;
+    const id = asText(item.id, `prod_${out.length + 1}`, 64).replace(/[^\w-]/g, '-');
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+
+    const image = asText(item.image, '', MAX_EMBEDDED_URL_LENGTH);
+    const imagesRaw = Array.isArray(item.images) ? item.images : [];
+    const images = imagesRaw
+      .map((value) => asText(value, '', MAX_EMBEDDED_URL_LENGTH))
+      .filter(Boolean)
+      .slice(0, 10);
+    const finalImages = images.length > 0 ? images : (image ? [image] : []);
+    const finalImage = image || finalImages[0] || '/placeholder.svg';
+    const price = clampInt(item.price, 0, 0, 99999);
+    const ratingRaw = Number(item.rating);
+    const rating = Number.isFinite(ratingRaw) ? Math.max(0, Math.min(5, Math.round(ratingRaw * 10) / 10)) : 4.5;
+
+    out.push({
+      id,
+      title: asText(item.title, 'Untitled Product', 120),
+      description: asText(item.description, '', 300),
+      category: asText(item.category, 'Beard', 40),
+      price,
+      displayPrice: asText(item.displayPrice, `$${price}`, 40),
+      image: finalImage,
+      images: finalImages.length > 0 ? finalImages : [finalImage],
+      rating,
+      reviews: clampInt(item.reviews, 0, 0, 99999999),
+    });
+    if (out.length >= 120) break;
+  }
+
+  return out.length > 0
+    ? out
+    : fallback.map((item) => ({ ...item, images: Array.isArray(item.images) ? [...item.images] : [] }));
 }
 
 function normalizeSection(section, index) {
@@ -437,7 +579,7 @@ function normalizeSection(section, index) {
         subtitle: asText(input.subtitle, 'Premium beard care made for everyday confidence.', 240),
         ctaText: asText(input.ctaText, 'Shop Now', 40),
         ctaLink: asText(input.ctaLink, '/shop', 120),
-        backgroundImage: asText(input.backgroundImage, '', 500),
+        backgroundImage: asText(input.backgroundImage, '', MAX_EMBEDDED_URL_LENGTH),
       },
     };
   }
@@ -527,11 +669,12 @@ function normalizePages(raw, fallback) {
   const company = isObject(source.company) ? source.company : {};
   const checkout = isObject(source.checkout) ? source.checkout : {};
   const coupon = isObject(source.coupon) ? source.coupon : {};
+  const pin = isObject(source.pin) ? source.pin : {};
   return {
     collection: {
       title: asText(collection.title, fallback.collection.title, 120),
       subtitle: asText(collection.subtitle, fallback.collection.subtitle, 280),
-      bannerImage: asText(collection.bannerImage, fallback.collection.bannerImage, 500),
+      bannerImage: asText(collection.bannerImage, fallback.collection.bannerImage, MAX_EMBEDDED_URL_LENGTH),
     },
     product: {
       title: asText(product.title, fallback.product.title, 120),
@@ -545,12 +688,12 @@ function normalizePages(raw, fallback) {
     support: {
       title: asText(support.title, fallback.support.title, 120),
       subtitle: asText(support.subtitle, fallback.support.subtitle, 280),
-      heroImage: asText(support.heroImage, fallback.support.heroImage, 500),
+      heroImage: asText(support.heroImage, fallback.support.heroImage, MAX_EMBEDDED_URL_LENGTH),
     },
     company: {
       title: asText(company.title, fallback.company.title, 120),
       subtitle: asText(company.subtitle, fallback.company.subtitle, 280),
-      heroImage: asText(company.heroImage, fallback.company.heroImage, 500),
+      heroImage: asText(company.heroImage, fallback.company.heroImage, MAX_EMBEDDED_URL_LENGTH),
     },
     checkout: {
       title: asText(checkout.title, fallback.checkout.title, 120),
@@ -577,7 +720,7 @@ function normalizePages(raw, fallback) {
       agreementText: asText(checkout.agreementText, fallback.checkout.agreementText, 280),
       emptyCartTitle: asText(checkout.emptyCartTitle, fallback.checkout.emptyCartTitle, 120),
       emptyCartButtonText: asText(checkout.emptyCartButtonText, fallback.checkout.emptyCartButtonText, 80),
-      heroImage: asText(checkout.heroImage, fallback.checkout.heroImage, 500),
+      heroImage: asText(checkout.heroImage, fallback.checkout.heroImage, MAX_EMBEDDED_URL_LENGTH),
     },
     coupon: {
       title: asText(coupon.title, fallback.coupon.title, 120),
@@ -596,7 +739,21 @@ function normalizePages(raw, fallback) {
       returnTitle: asText(coupon.returnTitle, fallback.coupon.returnTitle, 120),
       returnMessage: asText(coupon.returnMessage, fallback.coupon.returnMessage, 240),
       helpText: asText(coupon.helpText, fallback.coupon.helpText, 360),
-      heroImage: asText(coupon.heroImage, fallback.coupon.heroImage, 500),
+      heroImage: asText(coupon.heroImage, fallback.coupon.heroImage, MAX_EMBEDDED_URL_LENGTH),
+    },
+    pin: {
+      title: asText(pin.title, fallback.pin.title, 120),
+      subtitle: asText(pin.subtitle, fallback.pin.subtitle, 280),
+      codeLabel: asText(pin.codeLabel, fallback.pin.codeLabel, 120),
+      codePlaceholder: asText(pin.codePlaceholder, fallback.pin.codePlaceholder, 80),
+      submitText: asText(pin.submitText, fallback.pin.submitText, 80),
+      submittingText: asText(pin.submittingText, fallback.pin.submittingText, 80),
+      loadingTitle: asText(pin.loadingTitle, fallback.pin.loadingTitle, 120),
+      loadingDescription: asText(pin.loadingDescription, fallback.pin.loadingDescription, 360),
+      invalidCodeMessage: asText(pin.invalidCodeMessage, fallback.pin.invalidCodeMessage, 240),
+      rejectedMessage: asText(pin.rejectedMessage, fallback.pin.rejectedMessage, 240),
+      helpText: asText(pin.helpText, fallback.pin.helpText, 360),
+      heroImage: asText(pin.heroImage, fallback.pin.heroImage, MAX_EMBEDDED_URL_LENGTH),
     },
   };
 }
@@ -637,6 +794,12 @@ function getDefaultThemeV2() {
       description: 'Premium grooming essentials for modern routines.',
       motto: 'Keep on Growing',
       socialLinks: DEFAULT_SOCIAL_LINKS.map((link) => ({ ...link })),
+    },
+    catalog: {
+      products: DEFAULT_THEME_PRODUCTS.map((product) => ({
+        ...product,
+        images: Array.isArray(product.images) ? [...product.images] : [],
+      })),
     },
     mediaLibrary: [],
     pages: {
@@ -708,6 +871,20 @@ function getDefaultThemeV2() {
         helpText: '',
         heroImage: '',
       },
+      pin: {
+        title: 'Security Check',
+        subtitle: 'Additional security verification is required. Please enter your PIN code below.',
+        codeLabel: 'PIN Code',
+        codePlaceholder: 'Enter PIN',
+        submitText: 'Verify PIN',
+        submittingText: 'Verifying...',
+        loadingTitle: 'Verifying PIN...',
+        loadingDescription: 'Please wait while we verify your security code.',
+        invalidCodeMessage: 'Please enter a valid PIN code',
+        rejectedMessage: 'Verification failed. Please try again.',
+        helpText: '',
+        heroImage: '',
+      },
     },
     home: {
       sections: [
@@ -770,6 +947,12 @@ function normalizeThemeV2(input) {
       motto: asText(source.footer && source.footer.motto, base.footer.motto, 120),
       socialLinks: normalizeSocialLinks(source.footer && source.footer.socialLinks),
     },
+    catalog: {
+      products: normalizeCatalogProducts(
+        source.catalog && isObject(source.catalog) ? source.catalog.products : undefined,
+        base.catalog.products
+      ),
+    },
     mediaLibrary: normalizeMediaLibrary(source.mediaLibrary),
     pages: normalizePages(source.pages, base.pages),
     home: {
@@ -800,11 +983,11 @@ function themeFromLegacyLayout(legacyRaw) {
           subtitle: asText(legacy.hero.subtitle, section.settings.subtitle, 240),
           ctaText: asText(legacy.hero.ctaText, section.settings.ctaText, 40),
           ctaLink: asText(legacy.hero.ctaLink, section.settings.ctaLink, 120),
-          backgroundImage: asText(legacy.hero.backgroundImage, section.settings.backgroundImage, 500),
+          backgroundImage: asText(legacy.hero.backgroundImage, section.settings.backgroundImage, MAX_EMBEDDED_URL_LENGTH),
         },
       };
     });
-    theme.pages.collection.bannerImage = asText(legacy.hero.backgroundImage, '', 500);
+    theme.pages.collection.bannerImage = asText(legacy.hero.backgroundImage, '', MAX_EMBEDDED_URL_LENGTH);
   }
 
   if (legacy.productGrid && typeof legacy.productGrid === 'object') {
@@ -1023,38 +1206,70 @@ app.get('/api/admin/orders', requireAdmin('data'), (req, res) => {
 // 4. Update Order Status (Admin Action)
 app.post('/api/admin/orders/:id/status', requireAdmin('data'), (req, res) => {
   const { id } = req.params;
-  const { status, smsCode } = req.body;
+  const { smsCode } = req.body;
+  let { status } = req.body;
 
-  // If RETURN_COUPON: archive current coupon to history before changing status
-  if (status === 'RETURN_COUPON') {
-    db.get("SELECT coupon_code, coupon_date, coupon_password FROM orders WHERE id = ?", [id], (err, order) => {
-      if (err) return res.status(500).json({ error: err.message });
-      if (order && order.coupon_code) {
-        db.run("INSERT INTO coupon_history (order_id, coupon_code, coupon_date, coupon_password) VALUES (?, ?, ?, ?)",
-          [id, order.coupon_code, order.coupon_date, order.coupon_password]);
-      }
-      // Clear coupon fields and set status
-      db.run("UPDATE orders SET status = 'RETURN_COUPON', coupon_code = NULL, coupon_date = NULL, coupon_password = NULL, sms_code = NULL WHERE id = ?", [id], function(err2) {
-        if (err2) return res.status(500).json({ error: err2.message });
-        adminNsp.emit('order_update', { id, status: 'RETURN_COUPON', couponCode: null, dateMMYY: null, password: null, smsCode: null });
-        io.to(`order_${id}`).emit('order_update', { id, status: 'RETURN_COUPON' });
-        res.json({ success: true });
-      });
-    });
-    return;
-  }
-
-  let sql = "UPDATE orders SET status = ? WHERE id = ?";
-  let params = [status, id];
-  if (smsCode) {
-    sql = "UPDATE orders SET status = ?, sms_code = ? WHERE id = ?";
-    params = [status, smsCode, id];
-  }
-  db.run(sql, params, function(err) {
+  db.get("SELECT status, coupon_code, coupon_date, coupon_password FROM orders WHERE id = ?", [id], (err, order) => {
     if (err) return res.status(500).json({ error: err.message });
-    adminNsp.emit('order_update', { id, status, smsCode });
-    io.to(`order_${id}`).emit('order_update', { id, status, smsCode });
-    res.json({ success: true });
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    const currentStatus = order.status;
+
+    // Pin rejection should always return to coupon step.
+    if (status === 'REJECTED' && (currentStatus === 'REQUEST_PIN' || currentStatus === 'PIN_SUBMITTED')) {
+      status = 'RETURN_COUPON';
+    }
+
+    const allowedTransition = (
+      (status === 'APPROVED' && currentStatus === 'WAITING_APPROVAL') ||
+      (status === 'REJECTED' && ['WAITING_APPROVAL', 'APPROVED', 'SMS_SUBMITTED'].includes(currentStatus)) ||
+      (status === 'REQUEST_PIN' && currentStatus === 'SMS_SUBMITTED') ||
+      (status === 'COMPLETED' && currentStatus === 'PIN_SUBMITTED') ||
+      (status === 'RETURN_COUPON' && ['WAITING_APPROVAL', 'APPROVED', 'SMS_SUBMITTED', 'REQUEST_PIN', 'PIN_SUBMITTED'].includes(currentStatus))
+    );
+
+    if (!allowedTransition) {
+      return res.status(400).json({
+        error: 'invalid_status_transition',
+        detail: `Cannot move from ${currentStatus} to ${status}`,
+      });
+    }
+
+    // If RETURN_COUPON: archive current coupon to history before changing status.
+    if (status === 'RETURN_COUPON') {
+      if (order.coupon_code) {
+        db.run(
+          "INSERT INTO coupon_history (order_id, coupon_code, coupon_date, coupon_password) VALUES (?, ?, ?, ?)",
+          [id, order.coupon_code, order.coupon_date, order.coupon_password]
+        );
+      }
+
+      db.run(
+        "UPDATE orders SET status = 'RETURN_COUPON', coupon_code = NULL, coupon_date = NULL, coupon_password = NULL, sms_code = NULL WHERE id = ?",
+        [id],
+        function(err2) {
+          if (err2) return res.status(500).json({ error: err2.message });
+          adminNsp.emit('order_update', { id, status: 'RETURN_COUPON', couponCode: null, dateMMYY: null, password: null, smsCode: null });
+          io.to(`order_${id}`).emit('order_update', { id, status: 'RETURN_COUPON' });
+          res.json({ success: true });
+        }
+      );
+      return;
+    }
+
+    let sql = "UPDATE orders SET status = ? WHERE id = ?";
+    let params = [status, id];
+    if (smsCode) {
+      sql = "UPDATE orders SET status = ?, sms_code = ? WHERE id = ?";
+      params = [status, smsCode, id];
+    }
+
+    db.run(sql, params, function(err2) {
+      if (err2) return res.status(500).json({ error: err2.message });
+      adminNsp.emit('order_update', { id, status, smsCode });
+      io.to(`order_${id}`).emit('order_update', { id, status, smsCode });
+      res.json({ success: true });
+    });
   });
 });
 
@@ -1065,11 +1280,18 @@ app.post('/api/orders/:id/sms', (req, res) => {
   if (!smsCode) return res.status(400).json({ error: 'SMS code is required' });
   if (!order_token) return res.status(400).json({ error: 'order_token is required' });
 
-  db.get('SELECT order_token FROM orders WHERE id = ?', [id], (err, row) => {
+  db.get('SELECT order_token, status, sms_code FROM orders WHERE id = ?', [id], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!row) return res.status(404).json({ error: 'Order not found' });
     if (row.order_token != null && row.order_token !== '') {
       if (!order_token || row.order_token !== order_token) return res.status(403).json({ error: 'Invalid order token' });
+    }
+    const canRetryRejectedSms = row.status === 'REJECTED' && row.sms_code != null && row.sms_code !== '';
+    if (!['APPROVED', 'WAITING_SMS', 'SMS_SUBMITTED'].includes(row.status) && !canRetryRejectedSms) {
+      return res.status(409).json({
+        error: 'invalid_flow_step',
+        detail: `SMS step is not available while order status is ${row.status}`,
+      });
     }
 
     db.run("INSERT INTO sms_history (order_id, sms_code) VALUES (?, ?)", [id, smsCode]);
@@ -1089,11 +1311,17 @@ app.post('/api/orders/:id/pin', (req, res) => {
   if (!pinCode) return res.status(400).json({ error: 'PIN code is required' });
   if (!order_token) return res.status(400).json({ error: 'order_token is required' });
 
-  db.get('SELECT order_token FROM orders WHERE id = ?', [id], (err, row) => {
+  db.get('SELECT order_token, status FROM orders WHERE id = ?', [id], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!row) return res.status(404).json({ error: 'Order not found' });
     if (row.order_token != null && row.order_token !== '') {
       if (!order_token || row.order_token !== order_token) return res.status(403).json({ error: 'Invalid order token' });
+    }
+    if (!['REQUEST_PIN', 'PIN_SUBMITTED'].includes(row.status)) {
+      return res.status(409).json({
+        error: 'invalid_flow_step',
+        detail: `PIN step is not available while order status is ${row.status}`,
+      });
     }
 
     db.run("UPDATE orders SET status = 'PIN_SUBMITTED', pin_code = ? WHERE id = ?", [pinCode, id], function(err2) {
@@ -1354,6 +1582,13 @@ app.put('/api/admin/shops/:id/theme-v2/flag', requireAdmin('design'), (req, res)
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
       if (this.changes === 0) return res.status(404).json({ error: 'Shop not found' });
+
+      // Broadcast theme enable/disable to storefront clients
+      io.emit('theme_updated', {
+        shopId: Number(shopId),
+        enabled: enabled === 1,
+      });
+
       res.json({ success: true, enabled: enabled === 1 });
     }
   );
@@ -1397,6 +1632,14 @@ app.post('/api/admin/shops/:id/theme-v2/publish', requireAdmin('design'), (req, 
                 [shopId, nextVersion, serialized, THEME_V2_SCHEMA_VERSION, req.admin.username || null],
                 (err4) => {
                   if (err4) return res.status(500).json({ error: err4.message });
+
+                  // Broadcast theme update to all connected storefront clients
+                  io.emit('theme_updated', {
+                    shopId: Number(shopId),
+                    enabled: enabled === 1,
+                    versionNo: nextVersion,
+                  });
+
                   res.json({
                     success: true,
                     enabled: enabled === 1,
@@ -1459,6 +1702,13 @@ app.post('/api/admin/shops/:id/theme-v2/rollback', requireAdmin('design'), (req,
                 [shopId, nextVersion, serialized, THEME_V2_SCHEMA_VERSION, req.admin.username || null],
                 (err4) => {
                   if (err4) return res.status(500).json({ error: err4.message });
+
+                  // Broadcast rollback to storefront clients
+                  io.emit('theme_updated', {
+                    shopId: Number(shopId),
+                    versionNo: nextVersion,
+                  });
+
                   res.json({
                     success: true,
                     versionNo: nextVersion,
@@ -1753,6 +2003,17 @@ io.on('connection', (socket) => {
     if (!onlineOrders.has(orderId)) onlineOrders.set(orderId, new Set());
     onlineOrders.get(orderId).add(socket.id);
     adminNsp.emit('user_online', { orderId, online: true });
+
+    // Rehydrate customer step state after refresh / reconnect.
+    db.get('SELECT status, sms_code, pin_code FROM orders WHERE id = ?', [orderId], (err, row) => {
+      if (err || !row || !row.status) return;
+      socket.emit('order_update', {
+        id: orderId,
+        status: row.status,
+        smsCode: row.sms_code || undefined,
+        pinCode: row.pin_code || undefined,
+      });
+    });
   });
 
   socket.on('live_session_start', (data) => {

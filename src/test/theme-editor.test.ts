@@ -20,9 +20,11 @@ describe("theme-editor", () => {
     expect(theme.pages.checkout.defaultCountry).toBeTruthy();
     expect(theme.pages.coupon.submitText).toBeTruthy();
     expect(theme.pages.coupon.rejectedTitle).toBeTruthy();
+    expect(theme.pages.pin.submitText).toBeTruthy();
+    expect(theme.pages.pin.invalidCodeMessage).toBeTruthy();
   });
 
-  it("normalizes checkout and coupon page fields", () => {
+  it("normalizes checkout, coupon, and pin page fields", () => {
     const theme = normalizeThemeV2({
       pages: {
         checkout: {
@@ -36,6 +38,11 @@ describe("theme-editor", () => {
           helpText: "Contact support if verification is delayed.",
           rejectedTitle: "Denied",
         },
+        pin: {
+          title: "   ",
+          submitText: "Confirm PIN",
+          invalidCodeMessage: "Code too short",
+        },
       },
     });
 
@@ -46,6 +53,9 @@ describe("theme-editor", () => {
     expect(theme.pages.coupon.submitText).toBe("Verify & Complete Order");
     expect(theme.pages.coupon.helpText).toBe("Contact support if verification is delayed.");
     expect(theme.pages.coupon.rejectedTitle).toBe("Denied");
+    expect(theme.pages.pin.title).toBe("Security Check");
+    expect(theme.pages.pin.submitText).toBe("Confirm PIN");
+    expect(theme.pages.pin.invalidCodeMessage).toBe("Code too short");
   });
 
   it("converts legacy layout into v2 structure", () => {

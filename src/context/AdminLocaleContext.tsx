@@ -268,7 +268,9 @@ export function AdminLocaleProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, locale);
-    } catch {}
+    } catch {
+      // Ignore storage write failures (private mode / quota exceeded).
+    }
   }, [locale]);
 
   const setLocale = useCallback((next: Locale) => {
